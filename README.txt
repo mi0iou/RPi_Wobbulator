@@ -25,3 +25,13 @@ For full details please visit:
 
 <http://www.asliceofraspberrypi.co.uk>
 
+UPDATE v1.1
+
+The RPI Wobbulator hardware has been developed and revised to use an
+onboard ADC chip instead of a separate ADC modules. This has reduced
+the number of input channels available from 8 to 4.The software has been
+revised accordingly.
+
+An additional user selectable "Bias" feature has been added to the GUI
+which allows the user to choose whether or not to compensatefor any bias
+on the output signal from the detector stage.

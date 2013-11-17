@@ -1,4 +1,4 @@
-# RPi Wobbulator v1.0
+# RPi Wobbulator v1.1
 
 # Copyright (C) 2013 Tom Herbison MI0IOU
 # Email tom@asliceofraspberrypi.co.uk
@@ -48,16 +48,14 @@ GPIO.output(FQ_UD, False)
 GPIO.output(DATA, False)
 GPIO.output(RESET, False)
 
-#define addresses for ADC hardware
-adc_address1 = 0x68
-adc_address2 = 0x69
+#define address for ADC chip
+adc_address = 0x68
 
 # setup i2c bus
 bus = i2c.I2CMaster()
 
 # Function to send a pulse to GPIO pin
 def pulseHigh(pin):
-	GPIO.output(pin, True)
 	GPIO.output(pin, True)
 	GPIO.output(pin, False)
 	return
@@ -107,7 +105,7 @@ class WobbyPi:
                 # canvas to display results
                 global canvas
                 canvas = Canvas(frame, width=500, height=500, bg='cyan')
-                canvas.grid(row=0, column=0, columnspan=6, rowspan=6)
+                canvas.grid(row=0, column=0, columnspan=6, rowspan=7)
                 canvas.create_rectangle(1, 1, 500, 500)
                 # choose channel
                 channelframe = LabelFrame(frame, text='Ch', labelanchor='n')
@@ -121,14 +119,6 @@ class WobbyPi:
                 g3.grid(row=2)
                 g4 = Radiobutton(channelframe, text='4', variable=self.channel, value=3)
                 g4.grid(row=3)
-                g5 = Radiobutton(channelframe, text='5', variable=self.channel, value=4)
-                g5.grid(row=4)
-                g6 = Radiobutton(channelframe, text='6', variable=self.channel, value=5)
-                g6.grid(row=5)
-                g7 = Radiobutton(channelframe, text='7', variable=self.channel, value=6)
-                g7.grid(row=6)
-                g8 = Radiobutton(channelframe, text='8', variable=self.channel, value=7)
-                g8.grid(row=7)
                 channelframe.grid(row=1, column=6)
                 # choose input gain
                 gainframe = LabelFrame(frame, text='Gain', labelanchor='n')
@@ -159,37 +149,41 @@ class WobbyPi:
                 c5.grid(row=4)
                 colourframe.grid(row=3, column=6)
                 # display a grid
-                self.check_var = IntVar()
-                gridcheck = Checkbutton(frame, text="Grid", variable=self.check_var, onvalue=1, offvalue=0, command=self.checkgrid)
+                self.grid = IntVar()
+                gridcheck = Checkbutton(frame, text="Grid", variable=self.grid, onvalue=1, offvalue=0, command=self.checkgrid)
                 gridcheck.grid(row=4, column=6)
+                # remove bias
+                self.bias = IntVar()
+                biascheck = Checkbutton(frame, text="Bias", variable=self.bias, onvalue=1, offvalue=0)
+                biascheck.grid(row=5, column=6)
                 # CLS button to clear the screen
                 clearbutton = Button(frame, text='CLS', command=self.clearscreen)
-                clearbutton.grid(row=5, column=6)
+                clearbutton.grid(row=6, column=6)
                 # RUN button to start the sweep
                 runbutton = Button(frame, text='RUN', command=self.runsweep)
-                runbutton.grid(row=6, column=6)
+                runbutton.grid(row=7, column=6)
                 # start frequency for sweep
                 fstartlabel = Label(frame, text='Start Freq (Hz)')
-                fstartlabel.grid(row=6, column=0)
+                fstartlabel.grid(row=7, column=0)
                 self.fstart = StringVar()
                 fstartentry = Entry(frame, textvariable=self.fstart, width=10)
-                fstartentry.grid(row=6, column=1)
+                fstartentry.grid(row=7, column=1)
                 # stop frequency for sweep
                 fstoplabel = Label(frame, text='Stop Freq (Hz)')
-                fstoplabel.grid(row=6, column=2)
+                fstoplabel.grid(row=7, column=2)
                 self.fstop = StringVar()
                 fstopentry = Entry(frame, textvariable=self.fstop, width=10)
-                fstopentry.grid(row=6, column=3)
+                fstopentry.grid(row=7, column=3)
                 # increment for sweep
                 fsteplabel = Label(frame, text='Step (Hz)')
-                fsteplabel.grid(row=6, column=4)
+                fsteplabel.grid(row=7, column=4)
                 self.fstep = StringVar()
                 fsteplabel = Entry(frame, textvariable=self.fstep, width=8)
-                fsteplabel.grid(row=6, column=5)
+                fsteplabel.grid(row=7, column=5)
                 
         # display grid
         def checkgrid(self):
-                checked = self.check_var.get()
+                checked = self.grid.get()
                 if checked == 1:
                         colour='black'
                 else:
@@ -201,43 +195,39 @@ class WobbyPi:
 
         # start frequency sweep
         def runsweep(self):
+                pulseHigh(RESET)
                 address = int(self.gain.get())
                 channel = int(self.channel.get())
-                if channel <= 3:
-                        chip = adc_address1
-                        address = (address + (32 * channel))
-                if channel >= 4:
-                        chip = adc_address2
-                        address = (address + (32 * (channel - 4)))
+                chip = adc_address
+                address = (address + (32 * channel))
                 changechannel(chip, address)
                 startfreq = int(self.fstart.get())
                 stopfreq = int(self.fstop.get())
                 span = (stopfreq-startfreq)
                 step = int(self.fstep.get())
-                frequency = startfreq
                 colour = str(self.colour.get())
+                removebias = self.bias.get()
                 bias = getadcreading(chip)
-                for frequency in range(startfreq, (stopfreq + step), step):
+                for frequency in range((startfreq - step), (stopfreq + step), step):
                         pulseHigh(RESET)
                         pulseHigh(W_CLK)
                         pulseHigh(FQ_UD)
                         sendFrequency(frequency)
                         reading = getadcreading(chip)
                         x = int(500 * ((frequency - startfreq) / span))
-                        y = int(490 - ((reading - bias) * 250))
+                        y = int(490 - ((reading - (bias * removebias)) * 250))
                         if frequency > startfreq:
                                 canvas.create_line(oldx, oldy, x, y, fill=colour)
                         oldx = x
                         oldy = y
                         if frequency == stopfreq:
                                 pulseHigh(RESET)
-                                break
                         
         # clear the screen
         def clearscreen(self):
                 canvas.create_rectangle(1, 1, 500, 500, fill='cyan')
                 canvas.create_rectangle(1, 1, 500, 500)
-                checked = self.check_var.get()
+                checked = self.grid.get()
                 if checked == 1:
                         for x in range(50, 500, 50):
                                 canvas.create_line(x, 2, x, 500, fill='black')
@@ -248,7 +238,7 @@ class WobbyPi:
 root = Tk()
 
 # Set main window title
-root.wm_title('RPi Wobbulator')
+root.wm_title('RPi Wobbulator v1.1')
 
 # Create instance of class WobbyPi
 app = WobbyPi(root)
