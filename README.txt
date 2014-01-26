@@ -35,3 +35,9 @@ revised accordingly.
 An additional user selectable "Bias" feature has been added to the GUI
 which allows the user to choose whether or not to compensatefor any bias
 on the output signal from the detector stage.
+
+Update V2
+
+ Edits by Tony Abbey for >10 speed-up and continuous looping until STOP button pressed.
+# ADC now runs at 60 SPS and 14 bits
+# Also added initialisation of frequency scan values
