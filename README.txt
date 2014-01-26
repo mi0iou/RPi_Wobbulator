@@ -39,5 +39,5 @@ on the output signal from the detector stage.
 Update V2
 
  Edits by Tony Abbey for >10 speed-up and continuous looping until STOP button pressed.
-# ADC now runs at 60 SPS and 14 bits
+# ADC now runs at 60 SPS and 14 bits in one-shot mode
 # Also added initialisation of frequency scan values
