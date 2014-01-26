@@ -33,11 +33,21 @@ the number of input channels available from 8 to 4.The software has been
 revised accordingly.
 
 An additional user selectable "Bias" feature has been added to the GUI
-which allows the user to choose whether or not to compensatefor any bias
+which allows the user to choose whether or not to compensate for any bias
 on the output signal from the detector stage.
 
-Update V2
+UPDATE v2.0
 
- Edits by Tony Abbey for >10 speed-up and continuous looping until STOP button pressed.
-# ADC now runs at 60 SPS and 14 bits in one-shot mode
-# Also added initialisation of frequency scan values
+Edits by Tony Abbey for >10 speed-up and continuous looping until STOP button pressed.
+ADC now runs at 60 SPS and 14 bits in one-shot mode
+Also added initialisation of frequency scan value
+
+UPDATE v2.1
+
+Code was modified to clear the display between each cycle of the frequency sweep,
+thus emulating the behaviour of a conventional wobbulator more closely. This
+should make the software more useful when it is used to adjust tunable filters.
+Other minor changes included deleting of debugging code used to display status
+of various variables on the console window during execution. Default frequency
+sweep paramaters were also changed.
+

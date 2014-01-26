@@ -1,8 +1,16 @@
-# RPi Wobbulator v2_afa
+# RPi Wobbulator v2.1
 
-# Copyright (C) 2013 Tom Herbison MI0IOU
+# Copyright (C) 2013-2014 Tom Herbison MI0IOU
 # Email tom@asliceofraspberrypi.co.uk
 # Web <http://www.asliceofraspberrypi.co.uk>
+
+# Please see "README.txt" for a description of this software
+# and for details of the version change log
+
+# If you wish to make changes to this software and would like your
+# changes to be incorporated into a future release please visit,
+# <https://github.com/mi0iou/RPi_Wobbulator> and 'fork' the repository
+
 # Edits by Tony Abbey for 10 speed up and continuous looping until STOP button
 # ADC now runs at 60 SPS and 14 bits in one-shot mode to prevent glitches
 # Also added initialisation of frequency scan values
@@ -177,21 +185,21 @@ class WobbyPi():
                 self.fstart = StringVar()
                 fstartentry = Entry(frame, textvariable=self.fstart, width=10)
                 fstartentry.grid(row=8, column=1)
-                fstartentry.insert(0,"14967000")
+                fstartentry.insert(0,"14000000")
                 # stop frequency for sweep
                 fstoplabel = Label(frame, text='Stop Freq (Hz)')
                 fstoplabel.grid(row=8, column=2)
                 self.fstop = StringVar()
                 fstopentry = Entry(frame, textvariable=self.fstop, width=10)
                 fstopentry.grid(row=8, column=3)
-                fstopentry.insert(0,"14972000")
+                fstopentry.insert(0,"14200000")
                 # increment for sweep
                 fsteplabel = Label(frame, text='Step (Hz)')
                 fsteplabel.grid(row=8, column=4)
                 self.fstep = StringVar()
                 fstepentry = Entry(frame, textvariable=self.fstep, width=8)
                 fstepentry.grid(row=8, column=5)
-                fstepentry.insert(0,"100")
+                fstepentry.insert(0,"1000")
                 
         # display grid
         def checkgrid(self):
@@ -207,7 +215,6 @@ class WobbyPi():
 
         # start frequency sweep
         def sweep(self):
-                #print("in sweep")
                 pulseHigh(RESET)
                 address = int(self.gain.get())
                 channel = int(self.channel.get())
@@ -220,13 +227,14 @@ class WobbyPi():
                 step = int(self.fstep.get())
                 colour = str(self.colour.get())
                 removebias = self.bias.get()
-                bias = getadcreading(chip) 
+                bias = getadcreading(chip)
+                self.clearscreen()
                 for frequency in range((startfreq - step), (stopfreq + step), step):
                         pulseHigh(RESET)
                         pulseHigh(W_CLK)
                         pulseHigh(FQ_UD)
                         sendFrequency(frequency)
-                        changechannel(chip, address)  #trigger adc
+                        changechannel(chip, address) #trigger adc
                         reading = getadcreading(chip)
                         x = int(500 * ((frequency - startfreq) / span))
                         y = int(495 - ((reading - (bias * removebias)) * 250))
@@ -240,16 +248,13 @@ class WobbyPi():
                                     root.after(20, self.runsweep)
         # continuous sweep
         def runsweep(self):
-               #print("in runsweep")
-               #oldtime=time.time()
                if not root.stopflag:
                     self.sweep()
                else:
                     root.stopflag = 0
-               #print(time.time()-oldtime,"s")
+
         # set stop flag
         def stop(self):
-            print("set stop flag")
             root.stopflag=1
    
         # clear the screen
@@ -267,7 +272,7 @@ class WobbyPi():
 root = Tk()
 
 # Set main window title
-root.wm_title('RPi Wobbulator v1.1_afa')
+root.wm_title('RPi Wobbulator v2.1')
 
 # Create instance of class WobbyPi
 app = WobbyPi(root)
