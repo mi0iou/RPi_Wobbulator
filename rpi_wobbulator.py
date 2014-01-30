@@ -1,8 +1,15 @@
-# RPi Wobbulator v2.1
+# RPi Wobbulator v2.2
 
 # Copyright (C) 2013-2014 Tom Herbison MI0IOU
 # Email tom@asliceofraspberrypi.co.uk
 # Web <http://www.asliceofraspberrypi.co.uk>
+
+# Special thanks to Tony Abbey for his efforts developing v2 of the software...
+# Edits by Tony Abbey for 10 speed up and continuous looping until STOP button
+# ADC now runs at either 60 sps 14 bits or 240 SPS and 12 bits in one-shot mode
+# to prevent glitches. Also added initialisation of frequency scan values,
+# "Fast" option, optional screen clear every sweep plus code suggested by
+# Fred LaPlante for a "scope-like" trace
 
 # Please see "README.txt" for a description of this software
 # and for details of the version change log
@@ -10,10 +17,6 @@
 # If you wish to make changes to this software and would like your
 # changes to be incorporated into a future release please visit,
 # <https://github.com/mi0iou/RPi_Wobbulator> and 'fork' the repository
-
-# Edits by Tony Abbey for 10 speed up and continuous looping until STOP button
-# ADC now runs at 60 SPS and 14 bits in one-shot mode to prevent glitches
-# Also added initialisation of frequency scan values
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -36,8 +39,6 @@ import quick2wire.i2c as i2c
 
 # import GPIO module
 import RPi.GPIO as GPIO
-
-import time
 
 # setup GPIO
 GPIO.setmode(GPIO.BOARD)
@@ -96,17 +97,20 @@ def changechannel(address, adcConfig):
 	bus.transaction(i2c.writing_bytes(address, adcConfig))
 	return
 
-# Function to get reading from ADC (14 bit mode)		
+# Function to get reading from ADC (12 bit mode)		
 def getadcreading(address):
-	m, l ,s = bus.transaction(i2c.reading(address,3))[0]
-	while (s & 128):
-		m, l, s  = bus.transaction(i2c.reading(address,3))[0]
+        m, l ,s = bus.transaction(i2c.reading(address,3))[0]
+        while (s & 128):
+                m, l, s  = bus.transaction(i2c.reading(address,3))[0]
 	# shift bits to product result
-	t = (m << 8) | l
+        t = (m << 8) | l
 	# check if positive or negative number and invert if needed
-	if (m > 128):
-		t = ~(0x02000 - t)
-	return (t * 0.00025)
+        if (m > 128):
+                t = ~(0x02000 - t)
+        if root.fast:
+                return (t * 0.001) # 1mV per DN in 12 bit mode
+        else:
+                return (t * 0.00025) # 0.25mV per DN in 14 bit mode
 
 
 # Class definition for WobbyPi application
@@ -119,7 +123,7 @@ class WobbyPi():
                 # canvas to display results
                 global canvas
                 canvas = Canvas(frame, width=500, height=500, bg='cyan')
-                canvas.grid(row=0, column=0, columnspan=6, rowspan=8)
+                canvas.grid(row=0, column=0, columnspan=6, rowspan=9)
                 canvas.create_rectangle(1, 1, 500, 500)
                 # choose channel
                 channelframe = LabelFrame(frame, text='Ch', labelanchor='n')
@@ -166,40 +170,47 @@ class WobbyPi():
                 self.grid = IntVar()
                 gridcheck = Checkbutton(frame, text="Grid", variable=self.grid, onvalue=1, offvalue=0, command=self.checkgrid)
                 gridcheck.grid(row=4, column=6)
+                gridcheck.select()
+                self.checkgrid()
                 # remove bias
                 self.bias = IntVar()
                 biascheck = Checkbutton(frame, text="Bias", variable=self.bias, onvalue=1, offvalue=0)
                 biascheck.grid(row=5, column=6)
-                # CLS button to clear the screen
-                clearbutton = Button(frame, text='CLS', command=self.clearscreen)
-                clearbutton.grid(row=6, column=6)
+                # fast flag
+                self.fast = IntVar()
+                fastcheck = Checkbutton(frame, text="Fast", variable=self.fast, onvalue=1, offvalue=0)
+                fastcheck.grid(row=6, column=6)
+                # CLS check button to clear the screen every sweep
+                self.cls = IntVar()
+                clearbutton = Checkbutton(frame, text='CLS', variable=self.cls, onvalue=1, offvalue=0)
+                clearbutton.grid(row=7, column=6)
                 # RUN button to start the sweep
                 runbutton = Button(frame, text='RUN', command=self.runsweep)
-                runbutton.grid(row=7, column=6)
+                runbutton.grid(row=8, column=6)
                 # STOP button to stop continuous sweep
                 stopbutton = Button(frame, text='STOP', command=self.stop)
-                stopbutton.grid(row=8, column=6)
+                stopbutton.grid(row=9, column=6)
                 # start frequency for sweep
                 fstartlabel = Label(frame, text='Start Freq (Hz)')
-                fstartlabel.grid(row=8, column=0)
+                fstartlabel.grid(row=9, column=0)
                 self.fstart = StringVar()
                 fstartentry = Entry(frame, textvariable=self.fstart, width=10)
-                fstartentry.grid(row=8, column=1)
-                fstartentry.insert(0,"14000000")
+                fstartentry.grid(row=9, column=1)
+                fstartentry.insert(0,"14000000") # change this to your desired initial start value
                 # stop frequency for sweep
                 fstoplabel = Label(frame, text='Stop Freq (Hz)')
-                fstoplabel.grid(row=8, column=2)
+                fstoplabel.grid(row=9, column=2)
                 self.fstop = StringVar()
                 fstopentry = Entry(frame, textvariable=self.fstop, width=10)
-                fstopentry.grid(row=8, column=3)
-                fstopentry.insert(0,"14200000")
+                fstopentry.grid(row=9, column=3)
+                fstopentry.insert(0,"14200000") # change this to your desired initial end value
                 # increment for sweep
                 fsteplabel = Label(frame, text='Step (Hz)')
-                fsteplabel.grid(row=8, column=4)
+                fsteplabel.grid(row=9, column=4)
                 self.fstep = StringVar()
                 fstepentry = Entry(frame, textvariable=self.fstep, width=8)
-                fstepentry.grid(row=8, column=5)
-                fstepentry.insert(0,"1000")
+                fstepentry.grid(row=9, column=5)
+                fstepentry.insert(0,"1000") # change this to your desired initial step
                 
         # display grid
         def checkgrid(self):
@@ -215,8 +226,10 @@ class WobbyPi():
 
         # start frequency sweep
         def sweep(self):
+                #print("in sweep")
                 pulseHigh(RESET)
-                address = int(self.gain.get())
+                root.fast = int(self.fast.get())
+                address = int(self.gain.get())-4*root.fast # change to fast value if fast flag
                 channel = int(self.channel.get())
                 chip = adc_address
                 address = (address + (32 * channel))
@@ -228,18 +241,21 @@ class WobbyPi():
                 colour = str(self.colour.get())
                 removebias = self.bias.get()
                 bias = getadcreading(chip)
-                self.clearscreen()
+                if int(self.cls.get()):
+                       self.clearscreen()
+                root.fast = int(self.fast.get())
                 for frequency in range((startfreq - step), (stopfreq + step), step):
                         pulseHigh(RESET)
                         pulseHigh(W_CLK)
                         pulseHigh(FQ_UD)
                         sendFrequency(frequency)
-                        changechannel(chip, address) #trigger adc
+                        changechannel(chip, address)  #trigger adc
                         reading = getadcreading(chip)
                         x = int(500 * ((frequency - startfreq) / span))
                         y = int(495 - ((reading - (bias * removebias)) * 250))
                         if frequency > startfreq:
                                 canvas.create_line(oldx, oldy, x, y, fill=colour)
+                                canvas.update_idletasks() # new code to look like oscilloscop
                         oldx = x
                         oldy = y
                         if frequency == stopfreq:
@@ -272,7 +288,7 @@ class WobbyPi():
 root = Tk()
 
 # Set main window title
-root.wm_title('RPi Wobbulator v2.1')
+root.wm_title('RPi Wobbulator v2.2')
 
 # Create instance of class WobbyPi
 app = WobbyPi(root)
@@ -281,6 +297,7 @@ app = WobbyPi(root)
 
 root.startflag = 0
 root.stopflag = 0
+root.fast = 0
 
 # Start main loop and wait for input from GUI
 root.mainloop()

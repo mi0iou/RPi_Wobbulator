@@ -51,3 +51,9 @@ Other minor changes included deleting of debugging code used to display status
 of various variables on the console window during execution. Default frequency
 sweep paramaters were also changed.
 
+UPDATE v2.2
+
+Edits by Tony Abbey for optional screen clear feature after every sweep and incorporation
+of code suggested by Fred LaPlante for a "scope-like" trace. Implementation of "Fast" option
+to run the ADC chip at full speed and 12 Bit resolution. Code was also modified so that
+display "Grid" is on by default when the software is run.
