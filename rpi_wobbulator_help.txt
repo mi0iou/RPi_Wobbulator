@@ -1,0 +1,34 @@
+RPi Wobbulator
+
+Signal Generator Output
+The signal generator consists of an AD9850 DDS module operating under the control
+of the Raspberry Pi.  It can produce a sine wave signal over the range of about
+20 Hertz to 50 Mega-Hertz at an output level of ?? volts at an impedence of ?? ohms.
+Under normal conditions the generator output is always within the limits of the 
+detector /ADC limits of 2.01 volts.
+
+Detector Inputs
+- detectors
+There are two input available with seperate SMA female connectors: A 'linear' detector,
+referred as 'channel #1',is available at the left-most connector. and to its right is a
+'log' detector, referred to as 'channel #2'. Be sure that the channel selected on the 
+display matches the cable connector in use. 
+
+- signal processing
+The output of each detector is fed through a switch to a programmable amplifier and then 
+to a analog-to-digital-converter (ADC) fr use by the RPi Wobbulator program.  
+-- The amplifier can be instructed by a user to amplify the detector inputs by factors of 
+1,2,4,and 8 by simply selecting the desired 'gain' on the display. BUT...
+-- The ADC used has an internal limit of 2.01 volts input. A signal of this magnitude 
+will cause the output to be all '1's and no higher output is possible. Since the 
+generator produces a signal at a alevel just below the ADC's input limit, the user must be
+careful to not use gain factors that will produce more than 2 volts at the ADC input.
+( With the gain set to '1', and bias-removal 'off' run a sweep and note the highest level 
+signal on the display. If it exceeds 1 volt, then you can not use a higher gain factor.)
+-- the program provides a means for post-ADC bias removal. This must be used with care.
+With Bias unselected, the display is similar to a normal oscilliscope and the lower part 
+of the signal plot may not reach to zero. This can be confusing, as with successive sweeps 
+with different parameters may not all have the same lower-left starting points. Selecting
+Bias (removal, actually) will cause the lower left of each sweep to start at the same
+point on the display.  But, the voltage scale may then be incorrect as it does not reflect 
+the amount of dc bias removed from the plot.

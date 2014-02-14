@@ -57,3 +57,45 @@ Edits by Tony Abbey for optional screen clear feature after every sweep and inco
 of code suggested by Fred LaPlante for a "scope-like" trace. Implementation of "Fast"
 option to run the ADC chip at full speed and 12 Bit resolution. Code was also modified
 so that display "Grid" is on by default when the software is run.
+
+UPDATE v2.3
+Frequency and Volt labels added by Fred LaPlante
+
+UPDATE v2.4
+X and Y Scales added by Tony Abbey
+
+UPDATE v2.42
+Improved screen clarity by Richard Smith
+
+UPDATE v2.50
+Sweep settings saved in a paramater file by Fred LaPlante
+
+UPDATE v2.51
+Performance tweaks by Tony Abbey
+
+UPDATE v2.52
+Menus added by Fred LaPlante
+
+UPDATE v2.53
+K(Hz) and M(Hz) conversion added by Dick Bronsdijk
+
+UPDATE v2.54
+Display corrections and code cleanup by Dick Bronsdijk
+
+UPDATE v2.55
+Display tweaks and cleanup by Tony Abbey
+
+UPDATE v2.56
+Vertical text on Y scale and related tweaks by Tony Abbey
+
+UPDATE v2.57
+All paramaters now saved and restiored by Dick Bronsdijk
+
+UPDATE v2.58
+User description panel added by Fred LaPlante
+
+UPDATE v2.59
+Single sweep button added by Dick Bronsdijk
+
+
+
