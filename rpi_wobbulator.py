@@ -1,4 +1,4 @@
-# RPi Wobbulator v2.5.9
+# RPi Wobbulator v2.6.4
 
 # Copyright (C) 2013-2014 Tom Herbison MI0IOU
 # Email tom@asliceofraspberrypi.co.uk
@@ -14,6 +14,11 @@
 # Now programmable display size and scales, stored in parameter file by Fred
 # MHz, kHz i/p etc by Dick Bronsdijk
 # Display tweaks by various and Tony added vertical text on Y scale
+# v2.6.0 Addition of Y scale in dB and bias average of 2 readings - Tony
+# v2.6.1 Bias option automatically selected when using dB scale - Tom
+# v2.6.2 Grid Display issues corrected - Tom
+# v2.6.3 dBm button now updates the Y scale - Tony
+# v2.6.4 Recent changes consolidated and code tidied up - Tom
 
 # Please see "README.txt" for a description of this software
 # and for details of the version change log
@@ -71,6 +76,7 @@ except IOError:
     params['fast'] = 0
     params['cls'] = 0
     params['grid'] = 1
+    params['dB'] = 0
 # ---- end of user param support ----
 
 # ---- for app menus and associated displays ----
@@ -212,7 +218,8 @@ def changechannel(address, adcConfig):
     return
 
 # Function to get reading from ADC (12 bit mode)
-def getadcreading(address):
+def getadcreading(address, adcConfig): # << changed afa
+    bus.transaction(i2c.writing_bytes(address, adcConfig)) # << added afa 
     m, l ,s = bus.transaction(i2c.reading(address,3))[0]
     while (s & 128):
         m, l, s  = bus.transaction(i2c.reading(address,3))[0]
@@ -241,7 +248,6 @@ def fconv(f):
 class WobbyPi():
 
     # Build Graphical User Interface
-    #def __init__(self, master):
     def __init__(self, master, params):
         frame = Frame(master, bd=10)
         frame.pack(fill=BOTH,expand=1)
@@ -270,7 +276,7 @@ class WobbyPi():
         self.canvHt = self.mrgnTop + self.chrtHt + self.mrgnBotm
         self.canvWid = self.mrgnLeft + self.chrtWid + self.mrgnRight
         canvas = Canvas(frame, width=self.canvWid, height=self.canvHt, bg=self.canvBg)
-        canvas.grid(row=0, column=0, columnspan=6, rowspan=9)
+        canvas.grid(row=0, column=0, columnspan=6, rowspan=10)
 
         # choose channel
         channelframe = LabelFrame(frame, text='Ch', labelanchor='n')
@@ -359,48 +365,55 @@ class WobbyPi():
         clearbutton.grid(row=7, column=6)
         if int(params['cls']) == 1: #<< changed FL
             clearbutton.select()
+            
+        # dBm check button to change Y scale to dB #<< New button afa
+        self.dB = IntVar()
+        dBbutton = Checkbutton(frame, text='dBm', variable=self.dB, onvalue=1, offvalue=0, command = self.dispScales)
+        dBbutton.grid(row=8, column=6)
+        if int(params['dB']) == 1: 
+            dBbutton.select()
 
         # Button to start a single sweep        #<< New button db
         self.sweepbutton = Button(frame, text='Sweep', height = 1, width = 3, relief=RAISED, command=self.onesweep)
-        self.sweepbutton.grid(row=8, column=6)
+        self.sweepbutton.grid(row=9, column=6)
 
         # RUN button to start the sweep
         self.runbutton = Button(frame, text='RUN', height = 1, width = 3, relief=RAISED, command=self.loopsweep)
-        self.runbutton.grid(row=9, column=6)
+        self.runbutton.grid(row=10, column=6)
 
         # STOP button to stop continuous sweep
         self.stopbutton = Button(frame, text='STOP', height = 1, width = 3, relief=SUNKEN, command=self.stop)
-        self.stopbutton.grid(row=10, column=6)
+        self.stopbutton.grid(row=11, column=6)
 
         # start frequency for sweep
         fstartlabel = Label(frame, text='Start Freq (Hz)')
-        fstartlabel.grid(row=9, column=0)
+        fstartlabel.grid(row=10, column=0)
         self.fstart = StringVar()
         fstartentry = Entry(frame, textvariable=self.fstart, width=10)
-        fstartentry.grid(row=9, column=1)
+        fstartentry.grid(row=10, column=1)
         fstartentry.insert(0,self.fBegin)
 
         # stop frequency for sweep
         fstoplabel = Label(frame, text='Stop Freq (Hz)')
-        fstoplabel.grid(row=9, column=2)
+        fstoplabel.grid(row=10, column=2)
         self.fstop = StringVar()
         fstopentry = Entry(frame, textvariable=self.fstop, width=10)
-        fstopentry.grid(row=9, column=3)
+        fstopentry.grid(row=10, column=3)
         fstopentry.insert(0,self.fEnd)
 
         # increment for sweep
         fsteplabel = Label(frame, text='Step (Hz)')
-        fsteplabel.grid(row=9, column=4)
+        fsteplabel.grid(row=10, column=4)
         self.fstep = StringVar()
         fstepentry = Entry(frame, textvariable=self.fstep, width=8)
-        fstepentry.grid(row=9, column=5)
+        fstepentry.grid(row=10, column=5)
         fstepentry.insert(0,self.fIntvl)
 
         # user description space #<< new addition FL
         descLabel = Label(frame, text='Description')
-        descLabel.grid(row=10, column=0)
+        descLabel.grid(row=11, column=0)
         descEntry = Entry(frame, width=57)  #<< changed db
-        descEntry.grid(row=10, column=1, columnspan=5)
+        descEntry.grid(row=11, column=1, columnspan=5)
         
         # display a grid
         self.grid = IntVar()
@@ -410,6 +423,7 @@ class WobbyPi():
             gridcheck.select()
         self.checkgrid()
         self.dispScales()
+
 
     # clear the screen
     def clearscreen(self):
@@ -466,33 +480,47 @@ class WobbyPi():
         hLbl = canvas.create_text(hWhere, self.canvHt-5, text=fDesc)
 
     # display vertical axis labels << new function
-        startV = float(0)
+    
+        canvas.create_rectangle(0, 0, self.mrgnLeft-1, self.canvHt-self.mrgnBotm,
+                                fill=self.canvBg, outline=self.canvBg) #remove old Y scale <<moved and changed by ta 
+   
         gain = pow(2,(self.gainval.get()-132))
-        stopV = float(2.5)
-        if stopV == 2.5:
+        
+        if self.dB.get() == 1:
+            # self.yDivs = 25 # << with this commented out you should set the menu Ydivs to something which suits the dB scale 
+            self.bias.set(1) # << automatically select bias removal option when dBm scale is selected - tgh     
+            startV = float(-75)
+            stopV = float(50)
+            v0 = startV
+            vN = startV + 125/gain
+            vDesc = 'dBm'
+            vStep = (vN-v0)/self.yDivs
+            vLbls = ''
+            v = vN
+            vWhere = (self.mrgnBotm)/2 - 5
+            while v > v0:
+              vLbl = canvas.create_text(self.mrgnLeft-30, vWhere, text='{0:10.1f}'.format(v))
+              v = v - vStep
+              vWhere = vWhere+self.chrtHt/self.yDivs
+            vLbl = canvas.create_text(self.mrgnLeft-30, vWhere, text='{0:10.1f}'.format(v0))
+
+            
+        else:
+            startV = float(0)
+            stopV = float(2.5)
             v0 = startV
             vN = stopV/gain
             vDesc = 'Volts'
-        else:
-            v0 = startV
-            vN = round(stopV/gain,1)
-            #vDesc = 'SWR' # for future changes to scale
-            vDesc = 'Volts'
+            vStep = (vN-v0)/self.yDivs
+            vLbls = ''
+            v = vN
+            vWhere = (self.mrgnBotm)/2 - 5
+            while v > v0:
+              vLbl = canvas.create_text(self.mrgnLeft-30, vWhere, text='{0:10.3f}'.format(v))
+              v = v - vStep
+              vWhere = vWhere+self.chrtHt/self.yDivs
+            vLbl = canvas.create_text(self.mrgnLeft-30, vWhere, text='{0:10.3f}'.format(v0))
             
-        canvas.create_rectangle(0, 0, self.mrgnLeft-1, self.canvHt-self.mrgnBotm,
-                                fill=self.canvBg, outline=self.canvBg) #remove old Y scale <<moved and changed by ta 
-
-        vStep = (vN-v0)/self.yDivs
-        vLbls = ''
-        v = vN
-        vWhere = (self.mrgnBotm)/2 - 5
-        while v > v0:
-            #vLbl = canvas.create_text(10, vWhere, text='{0:10s}'.format(' ')) #<- commmented out not needed? - ta
-            vLbl = canvas.create_text(self.mrgnLeft-30, vWhere, text='{0:10.3f}'.format(v))
-            v = v - vStep
-            vWhere = vWhere+self.chrtHt/self.yDivs
-        #vLbl = canvas.create_text(10, vWhere, text='{0:10s}'.format(' ')) #<- commmented out not needed? - ta
-        vLbl = canvas.create_text(self.mrgnLeft-30, vWhere, text='{0:10.3f}'.format(v0))
         vWhere = (self.chrtHt) / 2 - 6	#<< changed ta
         vLbl = canvas.create_text(8, vWhere, text="\n".join(vDesc))#<- changed to give vertical text - ta
 
@@ -504,7 +532,7 @@ class WobbyPi():
         channel = int(self.channel.get())
         chip = adc_address
         address = (address + (32 * channel))
-        changechannel(chip, address) #trigger adc
+        # changechannel(chip, address) #trigger adc <<removed afa
         startfreq = fconv(self.fstart.get())	 
         stopfreq = fconv(self.fstop.get())	
         span = (stopfreq-startfreq)
@@ -518,7 +546,7 @@ class WobbyPi():
             self.oldstep = step	
         colour = str(self.colour.get())
         removebias = self.bias.get()
-        bias = getadcreading(chip)
+        bias = (getadcreading(chip, address) + getadcreading(chip, address))/2 #<< changed afa
         if int(self.cls.get()):
            self.clearscreen()
         root.fast = int(self.fast.get())
@@ -527,8 +555,8 @@ class WobbyPi():
             pulseHigh(W_CLK)
             pulseHigh(FQ_UD)
             sendFrequency(frequency)
-            changechannel(chip, address)  #trigger adc
-            reading = getadcreading(chip)
+            # changechannel(chip, address)  #trigger adc << removed afa
+            reading = getadcreading(chip, address) #includes triggering adc << added afa
             x = int(self.chrtWid * ((frequency - startfreq) / span)) + self.mrgnLeft
             y = int(self.chrtHt + self.mrgnTop - ((reading - (bias * removebias)) * self.chrtHt/2.5))
             if frequency > startfreq:
@@ -587,7 +615,7 @@ class WobbyPi():
 root = Tk()
 
 # Set main window title and menubar
-root.wm_title('RPi Wobbulator v2.5.9')
+root.wm_title('RPi Wobbulator v2.6.4')
 makemenu(root)
 
 # Create instance of class WobbyPi
@@ -618,6 +646,7 @@ params['bias'] = str(app.bias.get())
 params['fast'] = str(app.fast.get())
 params['cls'] = str(app.cls.get())
 params['grid'] = str(app.grid.get())
+params['dB'] = str(app.dB.get())
 #print (params)
 params = pickle.dump(params, paramFile)
 paramFile.close()

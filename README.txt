@@ -97,5 +97,24 @@ User description panel added by Fred LaPlante
 UPDATE v2.59
 Single sweep button added by Dick Bronsdijk
 
+UPDATE v2.60
+Added dBm button to change yscale to dBm by Tony Abbey.
+This requires subtracting the offset - now an average of 2 readings to make it as
+accurate as possible. Tried making this automatic in the dB code, but line doesnt
+work so is commented out - click on manually.
+Changed getadcreading to include the changechannel function so one call triggers adc
+and gets reading. Also changes Ydivs to 25 for a sensible scale in dB.
+Scale is based on 20mV/dB and a minimum level of -75dBm.
 
+UPDATE v2.61
+Bias option automatically selected when dBm scale is selected
+
+UPDATE v2.62
+Previous change of Ydivs to 25 when DBm selected disabled because it caused grid display issues
+
+UPDATE v2.63
+Y scale automatically updates when dBm option is selected
+
+UPDATE v2.64
+Recent changes consolidated and code tidied up
 
