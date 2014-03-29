@@ -1,4 +1,4 @@
-# RPi Wobbulator v2.6.4
+# RPi Wobbulator v2.6.6
 
 # Copyright (C) 2013-2014 Tom Herbison MI0IOU
 # Email tom@asliceofraspberrypi.co.uk
@@ -19,6 +19,8 @@
 # v2.6.2 Grid Display issues corrected - Tom
 # v2.6.3 dBm button now updates the Y scale - Tony
 # v2.6.4 Recent changes consolidated and code tidied up - Tom
+# v2.6.5 Scaling changes to represent ADC range better and remove some old change comments - Tony (afa)
+# v2.6.6 Auto linear scale for ch 1, and optional lin/log for ch 2 - Tony
 
 # Please see "README.txt" for a description of this software
 # and for details of the version change log
@@ -281,11 +283,11 @@ class WobbyPi():
         # choose channel
         channelframe = LabelFrame(frame, text='Ch', labelanchor='n')
         self.channel = IntVar()
-        g1 = Radiobutton(channelframe, text='1', variable=self.channel, value=0)
+        g1 = Radiobutton(channelframe, text='1', variable=self.channel, value=0, command = self.dispScales) # << afa
         g1.grid(row=0)
         if int(params['vchan']) == 0:
             g1.select()
-        g2 = Radiobutton(channelframe, text='2', variable=self.channel, value=1)
+        g2 = Radiobutton(channelframe, text='2', variable=self.channel, value=1, command = self.dispScales) # << afa
         g2.grid(row=1)
         if int(params['vchan']) == 1:
             g2.select()
@@ -468,13 +470,11 @@ class WobbyPi():
         fStep = (fN-f0)/self.xDivs
         fLbls = ''
         f = f0
-        hWhere = (self.mrgnLeft/2)+18 #<- changed ta
+        hWhere = (self.mrgnLeft/2)+18
         while f < fN:
-            #hLbl = canvas.create_text(hWhere,self.canvHt-20, text='{0:10s}'.format(' ')) #<- commmented out not needed? - ta
             hLbl = canvas.create_text(hWhere,self.canvHt-20, text="{0:10.2f}".format(f))
             f = f + fStep
             hWhere = hWhere+self.chrtWid/self.xDivs
-        #hLbl = canvas.create_text(hWhere,self.canvHt-20, text='{0:10s}'.format(' ')) #<- commmented out not needed? - ta
         hLbl = canvas.create_text(hWhere,self.canvHt-20, text='{0:10.2f}'.format(fN))
         hWhere = ((self.mrgnLeft+self.chrtWid+self.mrgnRight) - len(fDesc)) / 2
         hLbl = canvas.create_text(hWhere, self.canvHt-5, text=fDesc)
@@ -482,17 +482,16 @@ class WobbyPi():
     # display vertical axis labels << new function
     
         canvas.create_rectangle(0, 0, self.mrgnLeft-1, self.canvHt-self.mrgnBotm,
-                                fill=self.canvBg, outline=self.canvBg) #remove old Y scale <<moved and changed by ta 
+                                fill=self.canvBg, outline=self.canvBg)
    
         gain = pow(2,(self.gainval.get()-132))
         
-        if self.dB.get() == 1:
-            # self.yDivs = 25 # << with this commented out you should set the menu Ydivs to something which suits the dB scale 
-            self.bias.set(1) # << automatically select bias removal option when dBm scale is selected - tgh     
+        if self.dB.get() == 1 and self.channel.get() == 1: # optional for channel 2 << afa
+            self.bias.set(1) # << automatically select bias removal option when dBm scale is selected - tgh
             startV = float(-75)
-            stopV = float(50)
+            stopV = float(25) # scale change <<afa
             v0 = startV
-            vN = startV + 125/gain
+            vN = startV + 100/gain # scale change <<afa
             vDesc = 'dBm'
             vStep = (vN-v0)/self.yDivs
             vLbls = ''
@@ -505,9 +504,10 @@ class WobbyPi():
             vLbl = canvas.create_text(self.mrgnLeft-30, vWhere, text='{0:10.1f}'.format(v0))
 
             
-        else:
+        if  self.channel.get() == 0 or self.dB.get() == 0: #  auto for channel 1 << afa
+            self.dB.set(0) # unset dB << afa
             startV = float(0)
-            stopV = float(2.5)
+            stopV = float(2.0) #  scale change << afa
             v0 = startV
             vN = stopV/gain
             vDesc = 'Volts'
@@ -521,9 +521,9 @@ class WobbyPi():
               vWhere = vWhere+self.chrtHt/self.yDivs
             vLbl = canvas.create_text(self.mrgnLeft-30, vWhere, text='{0:10.3f}'.format(v0))
             
-        vWhere = (self.chrtHt) / 2 - 6	#<< changed ta
-        vLbl = canvas.create_text(8, vWhere, text="\n".join(vDesc))#<- changed to give vertical text - ta
-
+        vWhere = (self.chrtHt) / 2 - 6
+        vLbl = canvas.create_text(8, vWhere, text="\n".join(vDesc))
+        
     # start frequency sweep
     def sweep(self):
         pulseHigh(RESET)
@@ -532,7 +532,7 @@ class WobbyPi():
         channel = int(self.channel.get())
         chip = adc_address
         address = (address + (32 * channel))
-        # changechannel(chip, address) #trigger adc <<removed afa
+
         startfreq = fconv(self.fstart.get())	 
         stopfreq = fconv(self.fstop.get())	
         span = (stopfreq-startfreq)
@@ -546,7 +546,7 @@ class WobbyPi():
             self.oldstep = step	
         colour = str(self.colour.get())
         removebias = self.bias.get()
-        bias = (getadcreading(chip, address) + getadcreading(chip, address))/2 #<< changed afa
+        bias = (getadcreading(chip, address) + getadcreading(chip, address))/2
         if int(self.cls.get()):
            self.clearscreen()
         root.fast = int(self.fast.get())
@@ -555,10 +555,10 @@ class WobbyPi():
             pulseHigh(W_CLK)
             pulseHigh(FQ_UD)
             sendFrequency(frequency)
-            # changechannel(chip, address)  #trigger adc << removed afa
-            reading = getadcreading(chip, address) #includes triggering adc << added afa
+            
+            reading = getadcreading(chip, address) 
             x = int(self.chrtWid * ((frequency - startfreq) / span)) + self.mrgnLeft
-            y = int(self.chrtHt + self.mrgnTop - ((reading - (bias * removebias)) * self.chrtHt/2.5))
+            y = int(self.chrtHt + self.mrgnTop - ((reading - (bias * removebias)) * self.chrtHt/2.0)) # << scale change afa
             if frequency > startfreq:
                 canvas.create_line(oldx, oldy, x, y, fill=colour)
                 canvas.update_idletasks() # new code to look like oscilloscope
@@ -615,7 +615,7 @@ class WobbyPi():
 root = Tk()
 
 # Set main window title and menubar
-root.wm_title('RPi Wobbulator v2.6.4')
+root.wm_title('RPi Wobbulator v2.6.6')
 makemenu(root)
 
 # Create instance of class WobbyPi

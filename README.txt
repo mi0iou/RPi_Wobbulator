@@ -118,3 +118,10 @@ Y scale automatically updates when dBm option is selected
 UPDATE v2.64
 Recent changes consolidated and code tidied up
 
+UPDATE v2.65
+Scaling changes to represent ADC range better and remove some old change comments - Tony (afa)
+
+UPDATE v2.66
+Auto linear scale for ch 1, and optional lin/log for ch 2 - Tony
+
+
