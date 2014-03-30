@@ -124,4 +124,8 @@ Scaling changes to represent ADC range better and remove some old change comment
 UPDATE v2.66
 Auto linear scale for ch 1, and optional lin/log for ch 2 - Tony
 
+UPDATE v2.70
+"Fast" option removed and replaced with set of 4 radio buttons which allow the user to set the ADC
+at 3.75SPS 18Bit, 15SPS 16Bit, 60SPS 14Bit or 240SPS 12Bit - Tom
+
 

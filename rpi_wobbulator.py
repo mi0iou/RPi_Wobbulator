@@ -1,4 +1,4 @@
-# RPi Wobbulator v2.6.6
+# RPi Wobbulator v2.7.0
 
 # Copyright (C) 2013-2014 Tom Herbison MI0IOU
 # Email tom@asliceofraspberrypi.co.uk
@@ -21,6 +21,7 @@
 # v2.6.4 Recent changes consolidated and code tidied up - Tom
 # v2.6.5 Scaling changes to represent ADC range better and remove some old change comments - Tony (afa)
 # v2.6.6 Auto linear scale for ch 1, and optional lin/log for ch 2 - Tony
+# v2.7.0 ADC may now be set at 3.75SPS 18Bit, 15SPS 16Bit, 60SPS 14Bit or 240SPS 12Bit - Tom (tgh)
 
 # Please see "README.txt" for a description of this software
 # and for details of the version change log
@@ -70,15 +71,15 @@ except IOError:
     params['canvBg'] = 'cyan'
     params['fBegin'] = 14000000
     params['fEnd'] = 14200000
-    params['fIntvl'] = 10000
-    params['vgain'] = 132
+    params['fIntvl'] = 1000
+    params['vgain'] = 140
     params['vchan'] = 0
     params['colour'] = 'blue'
     params['bias'] = 0
-    params['fast'] = 0
     params['cls'] = 0
     params['grid'] = 1
     params['dB'] = 0
+    params['bits'] = 12
 # ---- end of user param support ----
 
 # ---- for app menus and associated displays ----
@@ -219,22 +220,35 @@ def changechannel(address, adcConfig):
     bus.transaction(i2c.writing_bytes(address, adcConfig))
     return
 
-# Function to get reading from ADC (12 bit mode)
-def getadcreading(address, adcConfig): # << changed afa
-    bus.transaction(i2c.writing_bytes(address, adcConfig)) # << added afa 
-    m, l ,s = bus.transaction(i2c.reading(address,3))[0]
-    while (s & 128):
-        m, l, s  = bus.transaction(i2c.reading(address,3))[0]
-    # shift bits to product result
-    t = (m << 8) | l
-    # check if positive or negative number and invert if needed
-    if (m > 128):
-        t = ~(0x02000 - t)
-    if root.fast:
-        return (t * 0.001) # 1mV per DN in 12 bit mode
+# Function to get reading from ADC << changed v2.7.0 - tgh
+def getadcreading(address, adcConfig):
+    bus.transaction(i2c.writing_bytes(address, adcConfig))
+    if (root.res >= 4):
+        m, l ,s = bus.transaction(i2c.reading(address,3))[0]
+        while (s & 128):
+            m, l, s  = bus.transaction(i2c.reading(address,3))[0]
+        # shift bits to product result
+        t = (m << 8) | l
+        # check if positive or negative number and invert if needed
+        if (m > 128):
+            t = ~(0x02000 - t)
+        if (root.res == 4):
+            return (t/16000)
+        if (root.res == 8):
+            return (t/4000)
+        if (root.res == 12):
+            return (t/1000)
     else:
-        return (t * 0.00025) # 0.25mV per DN in 14 bit mode
-
+        h, m, l ,s = bus.transaction(i2c.reading(address,4))[0]
+        while (s & 128):
+            h, m, l, s  = bus.transaction(i2c.reading(address,4))[0]
+        # shift bits to product result
+        t = ((h & 0b00000001) << 16) | (m << 8) | l
+        # check if positive or negative number and invert if needed
+        if (h > 128):
+            t = ~(0x020000 - t)
+        return (t/64000)
+        
 # Function to convert frequency f to Hz and return as int value
 #          e.g.: 10 MHz, 14.1m, 1k, 3.67 Mhz, 1.2 khz
 def fconv(f):	
@@ -301,26 +315,47 @@ class WobbyPi():
             g4.select()
         channelframe.grid(row=1, column=6)
 
-        # choose input gain - values changed from 3.75 SPS 18 bit to 60 SPS 14 bit, one shot mode
+        # choose input gain <<- changed tgh
         gainframe = LabelFrame(frame, text='Gain', labelanchor='n')
         self.gainval = IntVar()
-        g1 = Radiobutton(gainframe, text='1', variable=self.gainval, value=132, command = self.dispScales)
+        g1 = Radiobutton(gainframe, text='1', variable=self.gainval, value=140, command = self.dispScales)
         g1.grid(row=0)
-        if int(params['vgain']) == 132:
+        if int(params['vgain']) == 140:
             g1.select()
-        g2 = Radiobutton(gainframe, text='2', variable=self.gainval, value=133, command = self.dispScales)
+        g2 = Radiobutton(gainframe, text='2', variable=self.gainval, value=141, command = self.dispScales)
         g2.grid(row=1)
-        if int(params['vgain']) == 133:
+        if int(params['vgain']) == 141:
             g2.select()
-        g3 = Radiobutton(gainframe, text='4', variable=self.gainval, value=134, command = self.dispScales)
+        g3 = Radiobutton(gainframe, text='4', variable=self.gainval, value=142, command = self.dispScales)
         g3.grid(row=2)
-        if int(params['vgain']) == 134:
+        if int(params['vgain']) == 142:
             g3.select()
-        g4 = Radiobutton(gainframe, text='8', variable=self.gainval, value=135, command = self.dispScales)
+        g4 = Radiobutton(gainframe, text='8', variable=self.gainval, value=143, command = self.dispScales)
         g4.grid(row=3)
-        if int(params['vgain']) == 135:
+        if int(params['vgain']) == 143:
             g4.select()
         gainframe.grid(row=2, column=6)
+        
+        # choose resolution and sample rate 3.75SPS 18Bit, 15 SPS 16Bit, 60SPS 14Bit, or 240SPS 12Bit - tgh
+        bitframe = LabelFrame(frame, text='Bits', labelanchor='n')
+        self.bitval = IntVar()
+        b1 = Radiobutton(bitframe, text='18', variable=self.bitval, value=0)
+        b1.grid(row=0)
+        if int(params['bits']) == 0:
+            b1.select()
+        b2 = Radiobutton(bitframe, text='16', variable=self.bitval, value=4)
+        b2.grid(row=1)
+        if int(params['bits']) == 4:
+            b2.select()
+        b3 = Radiobutton(bitframe, text='14', variable=self.bitval, value=8)
+        b3.grid(row=2)
+        if int(params['bits']) == 8:
+            b3.select()
+        b4 = Radiobutton(bitframe, text='12', variable=self.bitval, value=12)
+        b4.grid(row=3)
+        if int(params['bits']) == 12:
+            b4.select()
+        bitframe.grid(row=3, column=6)
 
         # choose a colour
         colourframe = LabelFrame(frame, text='Colour', labelanchor='n')
@@ -345,21 +380,15 @@ class WobbyPi():
         c5.grid(row=4)
         if params['colour'] == 'yellow':
             c5.select()
-        colourframe.grid(row=3, column=6)
+        colourframe.grid(row=4, column=6)
+
 
         # remove bias
         self.bias = IntVar()
         biascheck = Checkbutton(frame, text="Bias", variable=self.bias, onvalue=1, offvalue=0)
-        biascheck.grid(row=5, column=6)
+        biascheck.grid(row=6, column=6)
         if int(params['bias']) == 1:
             biascheck.select()
-
-        # fast flag
-        self.fast = IntVar()
-        fastcheck = Checkbutton(frame, text="Fast", variable=self.fast, onvalue=1, offvalue=0)
-        fastcheck.grid(row=6, column=6)
-        if int(params['fast']) == 1: #<< changed FL
-            fastcheck.select()
 
         # CLS check button to clear the screen every sweep
         self.cls = IntVar()
@@ -420,7 +449,7 @@ class WobbyPi():
         # display a grid
         self.grid = IntVar()
         gridcheck = Checkbutton(frame, text="Grid", variable=self.grid, onvalue=1, offvalue=0, command=self.checkgrid)
-        gridcheck.grid(row=4, column=6)
+        gridcheck.grid(row=5, column=6)
         if int(params['grid']) == 1:
             gridcheck.select()
         self.checkgrid()
@@ -484,7 +513,7 @@ class WobbyPi():
         canvas.create_rectangle(0, 0, self.mrgnLeft-1, self.canvHt-self.mrgnBotm,
                                 fill=self.canvBg, outline=self.canvBg)
    
-        gain = pow(2,(self.gainval.get()-132))
+        gain = pow(2,(self.gainval.get()-140))
         
         if self.dB.get() == 1 and self.channel.get() == 1: # optional for channel 2 << afa
             self.bias.set(1) # << automatically select bias removal option when dBm scale is selected - tgh
@@ -527,12 +556,11 @@ class WobbyPi():
     # start frequency sweep
     def sweep(self):
         pulseHigh(RESET)
-        root.fast = int(self.fast.get())
-        address = int(self.gainval.get())-4*root.fast # change to fast value if fast flag
+        root.res = int(self.bitval.get())
+        address = int(self.gainval.get())- root.res # set resolution - tgh
         channel = int(self.channel.get())
         chip = adc_address
         address = (address + (32 * channel))
-
         startfreq = fconv(self.fstart.get())	 
         stopfreq = fconv(self.fstop.get())	
         span = (stopfreq-startfreq)
@@ -549,13 +577,11 @@ class WobbyPi():
         bias = (getadcreading(chip, address) + getadcreading(chip, address))/2
         if int(self.cls.get()):
            self.clearscreen()
-        root.fast = int(self.fast.get())
         for frequency in range((startfreq - step), (stopfreq + step), step):
             pulseHigh(RESET)
             pulseHigh(W_CLK)
             pulseHigh(FQ_UD)
             sendFrequency(frequency)
-            
             reading = getadcreading(chip, address) 
             x = int(self.chrtWid * ((frequency - startfreq) / span)) + self.mrgnLeft
             y = int(self.chrtHt + self.mrgnTop - ((reading - (bias * removebias)) * self.chrtHt/2.0)) # << scale change afa
@@ -566,7 +592,7 @@ class WobbyPi():
             oldy = y
             if frequency == stopfreq:      #<< changed db
                 pulseHigh(RESET)
-                root.after(100, self.runsweep)
+                root.after(10, self.runsweep) # changed tgh
 
     # continuous sweep
     def runsweep(self):
@@ -615,7 +641,7 @@ class WobbyPi():
 root = Tk()
 
 # Set main window title and menubar
-root.wm_title('RPi Wobbulator v2.6.6')
+root.wm_title('RPi Wobbulator v2.7.0')
 makemenu(root)
 
 # Create instance of class WobbyPi
@@ -625,7 +651,7 @@ app = WobbyPi(root, params)
 root.startflag = 0
 root.stopflag = 0
 root.oneflag = 0
-root.fast = 0
+root.res = 0
 
 # Start main loop and wait for input from GUI
 root.mainloop()
@@ -643,10 +669,10 @@ params['vgain'] = str(app.gainval.get())
 params['vchan'] = str(app.channel.get())
 params['colour'] = app.colour.get()
 params['bias'] = str(app.bias.get())
-params['fast'] = str(app.fast.get())
 params['cls'] = str(app.cls.get())
 params['grid'] = str(app.grid.get())
 params['dB'] = str(app.dB.get())
+params['bits'] = str(app.bitval.get())
 #print (params)
 params = pickle.dump(params, paramFile)
 paramFile.close()
