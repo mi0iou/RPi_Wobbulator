@@ -128,4 +128,8 @@ UPDATE v2.70
 "Fast" option removed and replaced with set of 4 radio buttons which allow the user to set the ADC
 at 3.75SPS 18Bit, 15SPS 16Bit, 60SPS 14Bit or 240SPS 12Bit - Tom
 
-
+UPDATE v2.71
+The dBm scale was changed to make better use of the available space. "DBm" option removed and dBm
+scale only shown when using Channel 2, with Volt scale show for other channels. "Bias" option also
+removed and bias compensation applied to channel 2 only, with no bias compensation applied to other
+channels. Code and comments tidied up - Tom

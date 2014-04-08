@@ -1,4 +1,4 @@
-# RPi Wobbulator v2.7.0
+# RPi Wobbulator v2.7.1
 
 # Copyright (C) 2013-2014 Tom Herbison MI0IOU
 # Email tom@asliceofraspberrypi.co.uk
@@ -22,6 +22,9 @@
 # v2.6.5 Scaling changes to represent ADC range better and remove some old change comments - Tony (afa)
 # v2.6.6 Auto linear scale for ch 1, and optional lin/log for ch 2 - Tony
 # v2.7.0 ADC may now be set at 3.75SPS 18Bit, 15SPS 16Bit, 60SPS 14Bit or 240SPS 12Bit - Tom (tgh)
+# v2.7.1 scale of dBm scale changed. DBm option removed and dBm scale only shown when using Channel 2,
+#        Volt scale show for other channels. Bias option removed and bias compensation applied to 
+#        channel 2, no bias compensation applied to other channels. Code tidied up - Tom (tgh)
 
 # Please see "README.txt" for a description of this software
 # and for details of the version change log
@@ -59,7 +62,7 @@ try:
     paramFN = 'wobParam.pkl'
     paramFile = open(paramFN,"rb")
     params = pickle.load(paramFile)
-    #print (params)
+    # print (params)
     paramFile.close()
 except IOError:
     # default parameters
@@ -75,10 +78,8 @@ except IOError:
     params['vgain'] = 140
     params['vchan'] = 0
     params['colour'] = 'blue'
-    params['bias'] = 0
     params['cls'] = 0
     params['grid'] = 1
-    params['dB'] = 0
     params['bits'] = 12
 # ---- end of user param support ----
 
@@ -133,11 +134,9 @@ def getYdivisions():
 def makemenu(win):
     top = Menu(win)
     win.config(menu=top)    # set its menu option
-
     file = Menu(top, tearoff=0)
     top.add_cascade(label='File', menu=file, underline=0)
     file.add_command(label='Exit', command=root.destroy, underline=1, accelerator='Ctrl+Q')
-
     opt = Menu(top, tearoff=0)
     top.add_cascade(label='Options', menu=opt, underline=0)
     opt.add_command(label='Background', command=getBackgroundColor, underline=0)
@@ -148,7 +147,6 @@ def makemenu(win):
     opt.add_separator()
     opt.add_command(label='X-divisions', command=getXdivisions, underline=0)
     opt.add_command(label='Y-divisions', command=getYdivisions, underline=0)
-
     help = Menu(top, tearoff=0)
     top.add_cascade(label='Help', menu=help, underline=0)
     help.add_command(label='About Wobbulator', command=notDone, underline=1)
@@ -215,30 +213,10 @@ def sendFrequency(frequency):
     pulseHigh(FQ_UD)
     return
 
-# Function to set address for ADC
-def changechannel(address, adcConfig):
+# Function to get reading from ADC << changed v2.7.0, v2.7.1 - tgh
+def getadcreading(address, adcConfig, res):
     bus.transaction(i2c.writing_bytes(address, adcConfig))
-    return
-
-# Function to get reading from ADC << changed v2.7.0 - tgh
-def getadcreading(address, adcConfig):
-    bus.transaction(i2c.writing_bytes(address, adcConfig))
-    if (root.res >= 4):
-        m, l ,s = bus.transaction(i2c.reading(address,3))[0]
-        while (s & 128):
-            m, l, s  = bus.transaction(i2c.reading(address,3))[0]
-        # shift bits to product result
-        t = (m << 8) | l
-        # check if positive or negative number and invert if needed
-        if (m > 128):
-            t = ~(0x02000 - t)
-        if (root.res == 4):
-            return (t/16000)
-        if (root.res == 8):
-            return (t/4000)
-        if (root.res == 12):
-            return (t/1000)
-    else:
+    if (res == 0):
         h, m, l ,s = bus.transaction(i2c.reading(address,4))[0]
         while (s & 128):
             h, m, l, s  = bus.transaction(i2c.reading(address,4))[0]
@@ -248,6 +226,21 @@ def getadcreading(address, adcConfig):
         if (h > 128):
             t = ~(0x020000 - t)
         return (t/64000)
+    else:
+        m, l ,s = bus.transaction(i2c.reading(address,3))[0]
+        while (s & 128):
+            m, l, s  = bus.transaction(i2c.reading(address,3))[0]
+        # shift bits to product result
+        t = (m << 8) | l
+        # check if positive or negative number and invert if needed
+        if (m > 128):
+            t = ~(0x02000 - t)
+        if (res == 4):
+            return (t/16000)
+        if (res == 8):
+            return (t/4000)
+        if (res == 12):
+            return (t/1000)
         
 # Function to convert frequency f to Hz and return as int value
 #          e.g.: 10 MHz, 14.1m, 1k, 3.67 Mhz, 1.2 khz
@@ -292,7 +285,7 @@ class WobbyPi():
         self.canvHt = self.mrgnTop + self.chrtHt + self.mrgnBotm
         self.canvWid = self.mrgnLeft + self.chrtWid + self.mrgnRight
         canvas = Canvas(frame, width=self.canvWid, height=self.canvHt, bg=self.canvBg)
-        canvas.grid(row=0, column=0, columnspan=6, rowspan=10)
+        canvas.grid(row=0, column=0, columnspan=6, rowspan=7)
 
         # choose channel
         channelframe = LabelFrame(frame, text='Ch', labelanchor='n')
@@ -305,15 +298,15 @@ class WobbyPi():
         g2.grid(row=1)
         if int(params['vchan']) == 1:
             g2.select()
-        g3 = Radiobutton(channelframe, text='3', variable=self.channel, value=2)
+        g3 = Radiobutton(channelframe, text='3', variable=self.channel, value=2,command = self.dispScales) # v2.7.1 tgh
         g3.grid(row=2)
         if int(params['vchan']) == 2:
             g3.select()
-        g4 = Radiobutton(channelframe, text='4', variable=self.channel, value=3)
+        g4 = Radiobutton(channelframe, text='4', variable=self.channel, value=3, command = self.dispScales) # v2.7.1 tgh
         g4.grid(row=3)
         if int(params['vchan']) == 3:
             g4.select()
-        channelframe.grid(row=1, column=6)
+        channelframe.grid(row=0, column=6)
 
         # choose input gain <<- changed tgh
         gainframe = LabelFrame(frame, text='Gain', labelanchor='n')
@@ -334,7 +327,7 @@ class WobbyPi():
         g4.grid(row=3)
         if int(params['vgain']) == 143:
             g4.select()
-        gainframe.grid(row=2, column=6)
+        gainframe.grid(row=1, column=6)
         
         # choose resolution and sample rate 3.75SPS 18Bit, 15 SPS 16Bit, 60SPS 14Bit, or 240SPS 12Bit - tgh
         bitframe = LabelFrame(frame, text='Bits', labelanchor='n')
@@ -355,7 +348,7 @@ class WobbyPi():
         b4.grid(row=3)
         if int(params['bits']) == 12:
             b4.select()
-        bitframe.grid(row=3, column=6)
+        bitframe.grid(row=2, column=6)
 
         # choose a colour
         colourframe = LabelFrame(frame, text='Colour', labelanchor='n')
@@ -380,81 +373,67 @@ class WobbyPi():
         c5.grid(row=4)
         if params['colour'] == 'yellow':
             c5.select()
-        colourframe.grid(row=4, column=6)
+        colourframe.grid(row=3, column=6)
 
-
-        # remove bias
-        self.bias = IntVar()
-        biascheck = Checkbutton(frame, text="Bias", variable=self.bias, onvalue=1, offvalue=0)
-        biascheck.grid(row=6, column=6)
-        if int(params['bias']) == 1:
-            biascheck.select()
-
+        # display a grid at row 4 column 6 - see below
+        
         # CLS check button to clear the screen every sweep
         self.cls = IntVar()
         clearbutton = Checkbutton(frame, text='CLS', variable=self.cls, onvalue=1, offvalue=0)
-        clearbutton.grid(row=7, column=6)
+        clearbutton.grid(row=5, column=6)
         if int(params['cls']) == 1: #<< changed FL
             clearbutton.select()
             
-        # dBm check button to change Y scale to dB #<< New button afa
-        self.dB = IntVar()
-        dBbutton = Checkbutton(frame, text='dBm', variable=self.dB, onvalue=1, offvalue=0, command = self.dispScales)
-        dBbutton.grid(row=8, column=6)
-        if int(params['dB']) == 1: 
-            dBbutton.select()
-
         # Button to start a single sweep        #<< New button db
         self.sweepbutton = Button(frame, text='Sweep', height = 1, width = 3, relief=RAISED, command=self.onesweep)
-        self.sweepbutton.grid(row=9, column=6)
+        self.sweepbutton.grid(row=6, column=6)
 
         # RUN button to start the sweep
         self.runbutton = Button(frame, text='RUN', height = 1, width = 3, relief=RAISED, command=self.loopsweep)
-        self.runbutton.grid(row=10, column=6)
+        self.runbutton.grid(row=7, column=6)
 
         # STOP button to stop continuous sweep
         self.stopbutton = Button(frame, text='STOP', height = 1, width = 3, relief=SUNKEN, command=self.stop)
-        self.stopbutton.grid(row=11, column=6)
+        self.stopbutton.grid(row=8, column=6)
 
         # start frequency for sweep
         fstartlabel = Label(frame, text='Start Freq (Hz)')
-        fstartlabel.grid(row=10, column=0)
+        fstartlabel.grid(row=7, column=0)
         self.fstart = StringVar()
         fstartentry = Entry(frame, textvariable=self.fstart, width=10)
-        fstartentry.grid(row=10, column=1)
+        fstartentry.grid(row=7, column=1)
         fstartentry.insert(0,self.fBegin)
 
         # stop frequency for sweep
         fstoplabel = Label(frame, text='Stop Freq (Hz)')
-        fstoplabel.grid(row=10, column=2)
+        fstoplabel.grid(row=7, column=2)
         self.fstop = StringVar()
         fstopentry = Entry(frame, textvariable=self.fstop, width=10)
-        fstopentry.grid(row=10, column=3)
+        fstopentry.grid(row=7, column=3)
         fstopentry.insert(0,self.fEnd)
 
         # increment for sweep
         fsteplabel = Label(frame, text='Step (Hz)')
-        fsteplabel.grid(row=10, column=4)
+        fsteplabel.grid(row=7, column=4)
         self.fstep = StringVar()
         fstepentry = Entry(frame, textvariable=self.fstep, width=8)
-        fstepentry.grid(row=10, column=5)
+        fstepentry.grid(row=7, column=5)
         fstepentry.insert(0,self.fIntvl)
 
         # user description space #<< new addition FL
         descLabel = Label(frame, text='Description')
-        descLabel.grid(row=11, column=0)
+        descLabel.grid(row=8, column=0)
         descEntry = Entry(frame, width=57)  #<< changed db
-        descEntry.grid(row=11, column=1, columnspan=5)
+        descEntry.grid(row=8, column=1, columnspan=5)
         
         # display a grid
         self.grid = IntVar()
         gridcheck = Checkbutton(frame, text="Grid", variable=self.grid, onvalue=1, offvalue=0, command=self.checkgrid)
-        gridcheck.grid(row=5, column=6)
+        gridcheck.grid(row=4, column=6)
         if int(params['grid']) == 1:
             gridcheck.select()
         self.checkgrid()
         self.dispScales()
-
 
     # clear the screen
     def clearscreen(self):
@@ -512,15 +491,13 @@ class WobbyPi():
     
         canvas.create_rectangle(0, 0, self.mrgnLeft-1, self.canvHt-self.mrgnBotm,
                                 fill=self.canvBg, outline=self.canvBg)
-   
         gain = pow(2,(self.gainval.get()-140))
         
-        if self.dB.get() == 1 and self.channel.get() == 1: # optional for channel 2 << afa
-            self.bias.set(1) # << automatically select bias removal option when dBm scale is selected - tgh
+        if self.channel.get() == 1: # if Channel 2 is selected v2.7.1 - tgh
             startV = float(-75)
-            stopV = float(25) # scale change <<afa
+            stopV = float(-25) # scale change (was 25) v2.7.1 - tgh
             v0 = startV
-            vN = startV + 100/gain # scale change <<afa
+            vN = startV + 50/gain # scale change (was 100) v2.7.1 - tgh
             vDesc = 'dBm'
             vStep = (vN-v0)/self.yDivs
             vLbls = ''
@@ -531,10 +508,7 @@ class WobbyPi():
               v = v - vStep
               vWhere = vWhere+self.chrtHt/self.yDivs
             vLbl = canvas.create_text(self.mrgnLeft-30, vWhere, text='{0:10.1f}'.format(v0))
-
-            
-        if  self.channel.get() == 0 or self.dB.get() == 0: #  auto for channel 1 << afa
-            self.dB.set(0) # unset dB << afa
+        else: # if Channel 2 is NOT selected v2.7.1 - tgh
             startV = float(0)
             stopV = float(2.0) #  scale change << afa
             v0 = startV
@@ -549,15 +523,14 @@ class WobbyPi():
               v = v - vStep
               vWhere = vWhere+self.chrtHt/self.yDivs
             vLbl = canvas.create_text(self.mrgnLeft-30, vWhere, text='{0:10.3f}'.format(v0))
-            
         vWhere = (self.chrtHt) / 2 - 6
         vLbl = canvas.create_text(8, vWhere, text="\n".join(vDesc))
         
     # start frequency sweep
     def sweep(self):
         pulseHigh(RESET)
-        root.res = int(self.bitval.get())
-        address = int(self.gainval.get())- root.res # set resolution - tgh
+        res = int(self.bitval.get())
+        address = int(self.gainval.get())- res # set resolution - tgh
         channel = int(self.channel.get())
         chip = adc_address
         address = (address + (32 * channel))
@@ -565,6 +538,13 @@ class WobbyPi():
         stopfreq = fconv(self.fstop.get())	
         span = (stopfreq-startfreq)
         step = fconv(self.fstep.get())
+        #set scale and bias dep[ending on which channel is selected
+        if channel == 1: # # if Channel 2 is selected v2.7.1 - tgh
+            scale = 1 # set scale for plotting trace v2.7.1 - tgh
+            bias = ((getadcreading(chip, address, res)+getadcreading(chip, address, res))/2) # take a bias reading v2.7.1 - tgh
+        else: # if Channel 2 is NOT selected v2.7.1 - tgh
+            scale = 2 # set scale for plotting trace v2.7.1 - tgh
+            bias = 0 # set bias to zero
         #  If a value has changed, only then refresh scales. This to avoid slowdown between sweeps    #<< added db
         if self.oldstartfreq != startfreq or self.oldstopfreq != stopfreq or self.oldspan != span or self.oldstep != step:
             self.dispScales()
@@ -573,8 +553,6 @@ class WobbyPi():
             self.oldspan = span
             self.oldstep = step	
         colour = str(self.colour.get())
-        removebias = self.bias.get()
-        bias = (getadcreading(chip, address) + getadcreading(chip, address))/2
         if int(self.cls.get()):
            self.clearscreen()
         for frequency in range((startfreq - step), (stopfreq + step), step):
@@ -582,9 +560,9 @@ class WobbyPi():
             pulseHigh(W_CLK)
             pulseHigh(FQ_UD)
             sendFrequency(frequency)
-            reading = getadcreading(chip, address) 
+            reading = getadcreading(chip, address, res) 
             x = int(self.chrtWid * ((frequency - startfreq) / span)) + self.mrgnLeft
-            y = int(self.chrtHt + self.mrgnTop - ((reading - (bias * removebias)) * self.chrtHt/2.0)) # << scale change afa
+            y = int(self.chrtHt + self.mrgnTop - ((reading - bias) * self.chrtHt/scale)) # << bias and scale change v2.7.1 - tgh
             if frequency > startfreq:
                 canvas.create_line(oldx, oldy, x, y, fill=colour)
                 canvas.update_idletasks() # new code to look like oscilloscope
@@ -596,9 +574,9 @@ class WobbyPi():
 
     # continuous sweep
     def runsweep(self):
-        if not root.stopflag:
-            if root.oneflag:
-                root.stopflag = True
+        if not self.stopflag:
+            if self.oneflag:
+                self.stopflag = True
             self.sweep()
         else:
             # change relief of button to show selected button
@@ -609,25 +587,24 @@ class WobbyPi():
     # initialize parameters for first sweep
     def startsweep(self):                                          #<< new function db
         self.stopbutton.config(relief=RAISED)
-        #   Initial data to check when Scales need refresh
+        # Initial data to check when Scales need refresh
         self.oldstartfreq = 0 
         self.oldstopfreq = 0
         self.oldspan = 0
         self.oldstep = 0
-        #	---------------------------------------------
-        root.stopflag = False
+        self.stopflag = False
         self.runsweep()
 
     # start single sweep
     def onesweep(self):                                       #<< new function db
         self.sweepbutton.config(relief=SUNKEN)
-        root.oneflag = True
+        self.oneflag = True
         self.startsweep()
         
     # start sweep after clearing stop flag to prevent need for dubble click run button
     def loopsweep(self):                                         #<< changed db
         self.runbutton.config(relief=SUNKEN)
-        root.oneflag = False
+        self.oneflag = False
         self.startsweep()
 
     # set stop flag
@@ -635,23 +612,17 @@ class WobbyPi():
         # change relief of button to show selected button     #<< added db
         self.stopbutton.config(relief=SUNKEN)
         self.dispScales()	
-        root.stopflag = True
+        self.stopflag = True
 
 # Assign TK to root
 root = Tk()
 
 # Set main window title and menubar
-root.wm_title('RPi Wobbulator v2.7.0')
+root.wm_title('RPi Wobbulator v2.7.1')
 makemenu(root)
 
 # Create instance of class WobbyPi
 app = WobbyPi(root, params)
-
-# initialise start and stopflags
-root.startflag = 0
-root.stopflag = 0
-root.oneflag = 0
-root.res = 0
 
 # Start main loop and wait for input from GUI
 root.mainloop()
@@ -660,6 +631,8 @@ root.mainloop()
 paramFile = open(paramFN, "wb")
 params['chrtHt'] = app.chrtHt
 params['chrtWid'] = app.chrtWid
+params['xDivs'] = app.xDivs
+params['yDivs'] = app.yDivs
 params['canvFg'] = app.canvFg
 params['canvBg'] = app.canvBg
 params['fBegin'] = str(app.fstart.get())
@@ -668,13 +641,9 @@ params['fIntvl'] = str(app.fstep.get())
 params['vgain'] = str(app.gainval.get())
 params['vchan'] = str(app.channel.get())
 params['colour'] = app.colour.get()
-params['bias'] = str(app.bias.get())
 params['cls'] = str(app.cls.get())
 params['grid'] = str(app.grid.get())
-params['dB'] = str(app.dB.get())
 params['bits'] = str(app.bitval.get())
-#print (params)
 params = pickle.dump(params, paramFile)
 paramFile.close()
-
 
