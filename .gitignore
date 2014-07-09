@@ -1,0 +1,6 @@
+# configuration (created by application as required)
+*.pkl
+# editor temporary files
+*.swp
+# python cache files
+Wobby/__pycache__

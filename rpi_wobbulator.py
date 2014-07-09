@@ -1,5 +1,8 @@
-# RPi Wobbulator v2.7.1
-
+#!/usr/bin/python3
+# vim:ai:sw=4:ts=8:et:fileencoding=ascii
+#
+# RPi Wobbulator v2.7.1-X
+#
 # Copyright (C) 2013-2014 Tom Herbison MI0IOU
 # Email tom@asliceofraspberrypi.co.uk
 # Web <http://www.asliceofraspberrypi.co.uk>
@@ -46,8 +49,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import time
+
 # import GUI module
 from tkinter import *
+
+import tempfile
+import subprocess
+import os
 
 # ---- get user preferences or set defaults ----
 # for param file persistence, import faster cPickle if available
@@ -56,205 +65,90 @@ try:
 except:
     import pickle
     
+version = '2.7.1-X'
+
 params = {}
-try:
-    # user parameters
-    paramFN = 'wobParam.pkl'
-    paramFile = open(paramFN,"rb")
-    params = pickle.load(paramFile)
-    # print (params)
-    paramFile.close()
-except IOError:
-    # default parameters
+
+def default_parameters():
+    print('Loading default parameters')
+    params['version'] = version
     params['chrtHt'] = 500
     params['chrtWid'] = 500
     params['xDivs'] = 10
     params['yDivs'] = 10
     params['canvFg'] = 'black'
-    params['canvBg'] = 'cyan'
-    params['fBegin'] = 14000000
-    params['fEnd'] = 14200000
-    params['fIntvl'] = 1000
-    params['vgain'] = 140
-    params['vchan'] = 0
-    params['colour'] = 'blue'
+    params['canvBg'] = '#008484'
+    params['fBegin'] = 0
+    params['fEnd'] = 35000000
+    params['fIntvl'] = 100000
+    params['vgain'] = 1
+    params['vchan'] = 1
+    params['colour'] = 'red'
+    params['ms'] = 0
+    params['rec'] = 0
+    params['cc'] = 0
     params['cls'] = 0
     params['grid'] = 1
-    params['bits'] = 12
+    params['bits'] = 18
+
+# user parameters
+paramFN = 'wobParam.pkl'
+try:
+    paramFile = open(paramFN,"rb")
+except IOError:
+    default_parameters()
+else:
+    try:
+        params = pickle.load(paramFile)
+    except EOFError:
+        default_parameters()
+    paramFile.close()
+try:
+    if params['version'] != version:
+        raise
+except:
+    default_parameters()
+# print (params)
+
 # ---- end of user param support ----
 
 # ---- for app menus and associated displays ----
 from tkinter import messagebox
 from tkinter import colorchooser
-
-def notDone():
-    messagebox.showerror('Not implemented', 'Not yet available')
-
-def getForegroundColor():
-    fgColor = colorchooser.askcolor(params['canvFg'], title='Foreground Color')
-    if fgColor[1] != 'None':
-        params['canvFg'] = fgColor[1]
-        app.canvFg = fgColor[1]
-    #print (params['canvFg'])   
-
-def getBackgroundColor():
-    bgColor = colorchooser.askcolor(params['canvBg'], title='Background Color')
-    if bgColor[1] != 'None':
-        params['canvBg'] = bgColor[1]
-        app.canvBg = bgColor[1]
-    #print (params['canvBg'])
-
-def getChartWidth():
-    chrtWid = simpledialog.askinteger('Chart Width', '300 to 1000',initialvalue=params['chrtWid'],minvalue=300,maxvalue=1000)
-    if chrtWid != 'None':
-        params['chrtWid'] = chrtWid
-        app.chrtWid = chrtWid
-    #print (chrtWid)
-
-def getChartHeight():
-    chrtHt = simpledialog.askinteger('Chart Height', '300 to 1000',initialvalue=params['chrtHt'],minvalue=300,maxvalue=1000)
-    if chrtHt != 'None':
-        params['chrtHt'] = chrtHt
-        app.chrtHt = chrtHt
-    #print (chrtHt)
-
-def getXdivisions():
-    xDivs = simpledialog.askinteger('X-divisions', '10-50',initialvalue=params['xDivs'],minvalue=10,maxvalue=50)
-    if xDivs != 'None':
-        params['xDivs'] = xDivs
-        app.xDivs = xDivs
-    #print (xDivs)
-def getYdivisions():
-    yDivs = simpledialog.askinteger('Y-divisions', '10-50',initialvalue=params['yDivs'],minvalue=10,maxvalue=50)
-    if yDivs != 'None':
-        params['yDivs'] = yDivs
-        app.yDivs = yDivs
-    #print (yDivs)
-    
-def makemenu(win):
-    top = Menu(win)
-    win.config(menu=top)    # set its menu option
-    file = Menu(top, tearoff=0)
-    top.add_cascade(label='File', menu=file, underline=0)
-    file.add_command(label='Exit', command=root.destroy, underline=1, accelerator='Ctrl+Q')
-    opt = Menu(top, tearoff=0)
-    top.add_cascade(label='Options', menu=opt, underline=0)
-    opt.add_command(label='Background', command=getBackgroundColor, underline=0)
-    opt.add_command(label='Foreground', command=getForegroundColor, underline=0)
-    opt.add_separator()
-    opt.add_command(label='Chart Width', command=getChartWidth, underline=6)
-    opt.add_command(label='Chart Height', command=getChartHeight, underline=6)
-    opt.add_separator()
-    opt.add_command(label='X-divisions', command=getXdivisions, underline=0)
-    opt.add_command(label='Y-divisions', command=getYdivisions, underline=0)
-    help = Menu(top, tearoff=0)
-    top.add_cascade(label='Help', menu=help, underline=0)
-    help.add_command(label='About Wobbulator', command=notDone, underline=1)
+from tkinter import filedialog
 # ---- end of menu support ----
 
-# ---- RaspBerry Pi IO support ----
-#import quick2wire i2c module
-import quick2wire.i2c as i2c
-
-# import GPIO module
-import RPi.GPIO as GPIO
-
-# setup GPIO
-GPIO.setmode(GPIO.BOARD)
-GPIO.setwarnings(False)
-
-# Define GPIO pins
-W_CLK = 15
-FQ_UD = 16
-DATA = 18
-RESET = 22
-
-# setup IO bits
-GPIO.setup(W_CLK, GPIO.OUT)
-GPIO.setup(FQ_UD, GPIO.OUT)
-GPIO.setup(DATA, GPIO.OUT)
-GPIO.setup(RESET, GPIO.OUT)
-
-# initialize everything to zero
-GPIO.output(W_CLK, False)
-GPIO.output(FQ_UD, False)
-GPIO.output(DATA, False)
-GPIO.output(RESET, False)
-
-#define address for ADC chip
-adc_address = 0x68
-
-# setup i2c bus
-bus = i2c.I2CMaster()
-
-# Function to send a pulse to GPIO pin
-def pulseHigh(pin):
-    GPIO.output(pin, True)
-    GPIO.output(pin, False)
-    return
-# ---- end of RaspBerry Pi IO support ----
-
-# ---- application specific stuff starts here ----
-# Function to send a byte to AD9850 module
-def tfr_byte(data):
-    for i in range (0,8):
-        GPIO.output(DATA, data & 0x01)
-        pulseHigh(W_CLK)
-        data=data>>1
-    return
-
-# Function to send frequency (assumes 125MHz xtal) to AD9850 module
-def sendFrequency(frequency):
-    freq=int(frequency*4294967296/125000000)
-    for b in range (0,4):
-        tfr_byte(freq & 0xFF)
-        freq=freq>>8
-    tfr_byte(0x00)
-    pulseHigh(FQ_UD)
-    return
-
-# Function to get reading from ADC << changed v2.7.0, v2.7.1 - tgh
-def getadcreading(address, adcConfig, res):
-    bus.transaction(i2c.writing_bytes(address, adcConfig))
-    if (res == 0):
-        h, m, l ,s = bus.transaction(i2c.reading(address,4))[0]
-        while (s & 128):
-            h, m, l, s  = bus.transaction(i2c.reading(address,4))[0]
-        # shift bits to product result
-        t = ((h & 0b00000001) << 16) | (m << 8) | l
-        # check if positive or negative number and invert if needed
-        if (h > 128):
-            t = ~(0x020000 - t)
-        return (t/64000)
-    else:
-        m, l ,s = bus.transaction(i2c.reading(address,3))[0]
-        while (s & 128):
-            m, l, s  = bus.transaction(i2c.reading(address,3))[0]
-        # shift bits to product result
-        t = (m << 8) | l
-        # check if positive or negative number and invert if needed
-        if (m > 128):
-            t = ~(0x02000 - t)
-        if (res == 4):
-            return (t/16000)
-        if (res == 8):
-            return (t/4000)
-        if (res == 12):
-            return (t/1000)
-        
-# Function to convert frequency f to Hz and return as int value
-#          e.g.: 10 MHz, 14.1m, 1k, 3.67 Mhz, 1.2 khz
-def fconv(f):	
-	f = f.upper()	
-	if f.find("K") > 0:	
-  		return (int(float(f[:f.find("K")]) * 1000))	
-	elif f.find("M") > 0:	
-  		return (int(float(f[:f.find("M")]) * 1000000))	
-	else:	
-  		return (int(float(f)))	
+from Wobby.ADC import ADC as WobbyADC
+from Wobby.DDS import DDS as WobbyDDS
 
 # Class definition for WobbyPi application
 class WobbyPi():
+
+    adc = WobbyADC()
+    dds = WobbyDDS()
+
+    buf_data = {}
+    buf_memstore = {}
+
+    _oldstartfreq = 0 
+    _oldstopfreq = 0
+    _oldspan = 0
+    _oldstep = 0
+    #_oldipchan
+    #_oldgain
+
+    #options_option = {0:[IntVar, 'Gr', 1, 0, self.grid, self.graticule_update],
+    #                  1:[IntVar, 'Cls', 1, 0, self.cls, ()],
+    #                    }
+
+    _ipchan_option = {0:1, 1:2, 2:3, 3:4}
+    _gain_option = {0:1, 1:2, 2:4, 3:8}
+    _bitres_option = {0:18, 1:16, 2:14, 3:12}
+    _colour_option = {0:'red', 1:'magenta', 2:'yellow', 3:'green', 4:'blue'}
+
+    _colour_button = {}
+    _colour_iterator = ()
+    _cycle_colour = 0
 
     # Build Graphical User Interface
     def __init__(self, master, params):
@@ -265,7 +159,7 @@ class WobbyPi():
 
         # setup working parameters
         # system values
-        self.mrgnLeft = 56 #<-changed ta
+        self.mrgnLeft = 56
         self.mrgnRight = 20 
         self.mrgnTop = 10 
         self.mrgnBotm = 30
@@ -284,351 +178,863 @@ class WobbyPi():
         global canvas
         self.canvHt = self.mrgnTop + self.chrtHt + self.mrgnBotm
         self.canvWid = self.mrgnLeft + self.chrtWid + self.mrgnRight
-        canvas = Canvas(frame, width=self.canvWid, height=self.canvHt, bg=self.canvBg)
-        canvas.grid(row=0, column=0, columnspan=6, rowspan=7)
+        canvas = Canvas(frame, width = self.canvWid, height = self.canvHt,
+                                                            bg = self.canvBg)
+        canvas.grid(row = 0, column = 0, columnspan = 6, rowspan = 7)
 
-        # choose channel
-        channelframe = LabelFrame(frame, text='Ch', labelanchor='n')
-        self.channel = IntVar()
-        g1 = Radiobutton(channelframe, text='1', variable=self.channel, value=0, command = self.dispScales) # << afa
-        g1.grid(row=0)
-        if int(params['vchan']) == 0:
-            g1.select()
-        g2 = Radiobutton(channelframe, text='2', variable=self.channel, value=1, command = self.dispScales) # << afa
-        g2.grid(row=1)
-        if int(params['vchan']) == 1:
-            g2.select()
-        g3 = Radiobutton(channelframe, text='3', variable=self.channel, value=2,command = self.dispScales) # v2.7.1 tgh
-        g3.grid(row=2)
-        if int(params['vchan']) == 2:
-            g3.select()
-        g4 = Radiobutton(channelframe, text='4', variable=self.channel, value=3, command = self.dispScales) # v2.7.1 tgh
-        g4.grid(row=3)
-        if int(params['vchan']) == 3:
-            g4.select()
-        channelframe.grid(row=0, column=6)
+        # Input channel
+        fr_ipchan = LabelFrame(frame, text = 'Input', labelanchor = 'n')
+        fr_ipchan.grid(row = 0, column = 6)
 
-        # choose input gain <<- changed tgh
-        gainframe = LabelFrame(frame, text='Gain', labelanchor='n')
+        self.ipchan = IntVar()
+        for key, ipchan in self._ipchan_option.items():
+            txt = str(key + 1)
+            rb = Radiobutton(fr_ipchan, text = txt, value = key,
+                                                variable = self.ipchan,
+                                                command = self.ipchan_update)
+            rb.grid(row = key, sticky = 'w')
+            if int(params['vchan']) == key + 1:
+                rb.select()
+
+        # Input gain
+        fr_gain = LabelFrame(frame, text = 'Gain', labelanchor = 'n')
+        fr_gain.grid(row = 1, column = 6)
+
         self.gainval = IntVar()
-        g1 = Radiobutton(gainframe, text='1', variable=self.gainval, value=140, command = self.dispScales)
-        g1.grid(row=0)
-        if int(params['vgain']) == 140:
-            g1.select()
-        g2 = Radiobutton(gainframe, text='2', variable=self.gainval, value=141, command = self.dispScales)
-        g2.grid(row=1)
-        if int(params['vgain']) == 141:
-            g2.select()
-        g3 = Radiobutton(gainframe, text='4', variable=self.gainval, value=142, command = self.dispScales)
-        g3.grid(row=2)
-        if int(params['vgain']) == 142:
-            g3.select()
-        g4 = Radiobutton(gainframe, text='8', variable=self.gainval, value=143, command = self.dispScales)
-        g4.grid(row=3)
-        if int(params['vgain']) == 143:
-            g4.select()
-        gainframe.grid(row=1, column=6)
-        
-        # choose resolution and sample rate 3.75SPS 18Bit, 15 SPS 16Bit, 60SPS 14Bit, or 240SPS 12Bit - tgh
-        bitframe = LabelFrame(frame, text='Bits', labelanchor='n')
+        for key, gain in self._gain_option.items():
+            txt = 'x ' + str(gain)
+            rb = Radiobutton(fr_gain, text = txt, value = key,
+                                                variable = self.gainval,
+                                                command = self.gain_update)
+            rb.grid(row = key, sticky = 'w')
+            if int(params['vgain']) == gain:
+                rb.select()
+
+        # Bit resolution 18Bit, 16Bit, 14Bit, 12Bit
+        fr_bitres = LabelFrame(frame, text = 'BPS', labelanchor = 'n')
+        fr_bitres.grid(row = 2, column = 6)
+
         self.bitval = IntVar()
-        b1 = Radiobutton(bitframe, text='18', variable=self.bitval, value=0)
-        b1.grid(row=0)
-        if int(params['bits']) == 0:
-            b1.select()
-        b2 = Radiobutton(bitframe, text='16', variable=self.bitval, value=4)
-        b2.grid(row=1)
-        if int(params['bits']) == 4:
-            b2.select()
-        b3 = Radiobutton(bitframe, text='14', variable=self.bitval, value=8)
-        b3.grid(row=2)
-        if int(params['bits']) == 8:
-            b3.select()
-        b4 = Radiobutton(bitframe, text='12', variable=self.bitval, value=12)
-        b4.grid(row=3)
-        if int(params['bits']) == 12:
-            b4.select()
-        bitframe.grid(row=2, column=6)
+        for key, bitres in self._bitres_option.items():
+            txt = str(bitres)
+            rb = Radiobutton(fr_bitres, text = txt, value = key,
+                                                variable = self.bitval,
+                                                command = self.bitres_update)
+            rb.grid(row = key, sticky = 'w')
+            if int(params['bits']) == bitres:
+                rb.select()
 
-        # choose a colour
-        colourframe = LabelFrame(frame, text='Colour', labelanchor='n')
+        # Colour of trace
+        fr_colour = LabelFrame(frame, text = 'Colour', labelanchor = 'n')
+        fr_colour.grid(row = 3, column = 6)
+
+        # FIXME use value = key
         self.colour = StringVar()
-        c1 = Radiobutton(colourframe, fg='blue', text='[B]', variable=self.colour, value='blue')
-        c1.grid(row=0)
-        if params['colour'] == 'blue':
-            c1.select()
-        c2 = Radiobutton(colourframe, fg='red', text='[R]', variable=self.colour, value='red')
-        c2.grid(row=1)
-        if params['colour'] == 'red':
-            c2.select()
-        c3 = Radiobutton(colourframe, fg='green', text='[G]', variable=self.colour, value='green')
-        c3.grid(row=2)
-        if params['colour'] == 'green':
-            c3.select()
-        c4 = Radiobutton(colourframe, fg='magenta', text='[M]', variable=self.colour, value='magenta')
-        c4.grid(row=3)
-        if params['colour'] == 'magenta':
-            c4.select()
-        c5 = Radiobutton(colourframe, fg='yellow', text='[Y]', variable=self.colour, value='yellow')
-        c5.grid(row=4)
-        if params['colour'] == 'yellow':
-            c5.select()
-        colourframe.grid(row=3, column=6)
+        # rb.invoke() below is dependant on self.colcyc
+        self.colcyc = IntVar()
+        for key, colour in self._colour_option.items():
+            txt = '[' + colour[0].upper() + ']'
+            rb = Radiobutton(fr_colour, fg = colour, text = txt, value = colour,
+                                                variable = self.colour,
+                                                command = self.colour_update)
+            rb.grid(row = key + 1, sticky = 'w')
+            key_rb = [key, rb]
+            self._colour_button[key] = rb
+            if params['colour'] == colour:
+                rb.invoke()
 
-        # display a grid at row 4 column 6 - see below
-        
-        # CLS check button to clear the screen every sweep
+        # Options
+        fr_cb = LabelFrame(frame, text = 'Opts', labelanchor = 'n')
+        fr_cb.grid(row = 4, column = 6)
+
+        # enable\disable graticule display
+        self.graticule = IntVar()
+        cb_graticule = Checkbutton(fr_cb, text = "Gr", onvalue = 1, offvalue = 0,
+                                            variable = self.graticule,
+                                            command = self.graticule_update)
+
+        # enable\disable clear screen before sweep
         self.cls = IntVar()
-        clearbutton = Checkbutton(frame, text='CLS', variable=self.cls, onvalue=1, offvalue=0)
-        clearbutton.grid(row=5, column=6)
-        if int(params['cls']) == 1: #<< changed FL
-            clearbutton.select()
+        cb_clear = Checkbutton(fr_cb, text = 'Cls', onvalue = 1, offvalue = 0,
+                                                        variable = self.cls)
+
+        # enable\disable record data
+        self.record = IntVar()
+        cb_record = Checkbutton(fr_cb, text = 'Rec', onvalue = 1, offvalue = 0,
+                                                variable = self.record,
+                                                command = self.record_update)
+
+        # enable\disable memory store (for trace persistence)
+        self.memstore = IntVar()
+        cb_memstore = Checkbutton(fr_cb, text = 'MS', onvalue = 1, offvalue = 0,
+                                                variable = self.memstore,
+                                                command = self.memstore_update)
+
+        # enable\disable memory store (for trace persistence)
+        cb_colcyc = Checkbutton(fr_cb, text = 'CC', onvalue = 1, offvalue = 0,
+                                                   variable = self.colcyc,
+                                                   command = self.colcyc_update)
+
+        cb_graticule.grid(row = 0, column = 0, sticky = 'w')
+        cb_clear.grid(row = 1, column = 0, sticky = 'w')
+        cb_record.grid(row = 2, column = 0, sticky = 'w')
+        cb_memstore.grid(row = 3, column = 0, sticky = 'w')
+        cb_colcyc.grid(row = 4, column = 0, sticky = 'w')
+
+        if int(params['grid']) == 1:
+            cb_graticule.select()
+        if int(params['cls']) == 1:
+            cb_clear.select()
+        if int(params['rec']) == 1:
+            cb_record.select()
+        if int(params['ms']) == 1:
+            cb_memstore.select()
+        if int(params['cc']) == 1:
+            cb_colcyc.select()
             
-        # Button to start a single sweep        #<< New button db
-        self.sweepbutton = Button(frame, text='Sweep', height = 1, width = 3, relief=RAISED, command=self.onesweep)
-        self.sweepbutton.grid(row=6, column=6)
+        # user description space
+        fr_desc = Label(frame, text = 'Description')
+        fr_desc.grid(row = 7, column = 0, columnspan = 1)
 
-        # RUN button to start the sweep
-        self.runbutton = Button(frame, text='RUN', height = 1, width = 3, relief=RAISED, command=self.loopsweep)
-        self.runbutton.grid(row=7, column=6)
-
-        # STOP button to stop continuous sweep
-        self.stopbutton = Button(frame, text='STOP', height = 1, width = 3, relief=SUNKEN, command=self.stop)
-        self.stopbutton.grid(row=8, column=6)
+        self.desc = StringVar()
+        e_desc = Entry(frame, width = 63, textvariable = self.desc)
+        e_desc.grid(row = 7, column = 1, columnspan = 4)
+        
+        # frequency entries
+        fr_freq = LabelFrame(frame, text = 'Frequency (Hz)', labelanchor = 'n')
+        fr_freq.grid(row = 8, column = 0, columnspan = 4)
 
         # start frequency for sweep
-        fstartlabel = Label(frame, text='Start Freq (Hz)')
-        fstartlabel.grid(row=7, column=0)
+        fr_startf = Label(fr_freq, text = 'Start:')
+        fr_startf.grid(row = 0, column = 0)
         self.fstart = StringVar()
-        fstartentry = Entry(frame, textvariable=self.fstart, width=10)
-        fstartentry.grid(row=7, column=1)
-        fstartentry.insert(0,self.fBegin)
+        e_startf = Entry(fr_freq, textvariable = self.fstart, width = 8, )
+        e_startf.grid(row = 0, column = 1)
+        e_startf.insert(0, self.fBegin)
+
+        """
+        e_startf.bind('<Key-Return>', self.startf_change)
+
+        def startf_change(self, event):
+            print("Start Frequency:", self.e_startf.get())
+        """
 
         # stop frequency for sweep
-        fstoplabel = Label(frame, text='Stop Freq (Hz)')
-        fstoplabel.grid(row=7, column=2)
         self.fstop = StringVar()
-        fstopentry = Entry(frame, textvariable=self.fstop, width=10)
-        fstopentry.grid(row=7, column=3)
-        fstopentry.insert(0,self.fEnd)
+        fr_stopf = Label(fr_freq, text = ' Stop:')
+        fr_stopf.grid(row = 0, column = 2)
+        e_stopf = Entry(fr_freq, textvariable = self.fstop, width = 8)
+        e_stopf.grid(row = 0, column = 3)
+        e_stopf.insert(0, self.fEnd)
 
         # increment for sweep
-        fsteplabel = Label(frame, text='Step (Hz)')
-        fsteplabel.grid(row=7, column=4)
+        fr_stepf = Label(fr_freq, text = ' Step:')
+        fr_stepf.grid(row = 0, column = 4)
         self.fstep = StringVar()
-        fstepentry = Entry(frame, textvariable=self.fstep, width=8)
-        fstepentry.grid(row=7, column=5)
-        fstepentry.insert(0,self.fIntvl)
+        e_stepf = Entry(fr_freq, textvariable=self.fstep, width = 8)
+        e_stepf.grid(row = 0, column = 5)
+        e_stepf.insert(0, self.fIntvl)
 
-        # user description space #<< new addition FL
-        descLabel = Label(frame, text='Description')
-        descLabel.grid(row=8, column=0)
-        descEntry = Entry(frame, width=57)  #<< changed db
-        descEntry.grid(row=8, column=1, columnspan=5)
-        
-        # display a grid
-        self.grid = IntVar()
-        gridcheck = Checkbutton(frame, text="Grid", variable=self.grid, onvalue=1, offvalue=0, command=self.checkgrid)
-        gridcheck.grid(row=4, column=6)
-        if int(params['grid']) == 1:
-            gridcheck.select()
-        self.checkgrid()
-        self.dispScales()
+        # control panel frame
+        fr_control = LabelFrame(frame, text = 'Control', labelanchor = 'n')
+        fr_control.grid(row = 8, column = 4, columnspan = 2)
+
+        # Button to reset settings
+        self.b_reset = Button(fr_control, text = 'Reset', height = 1, width = 3,
+                                                    activeforeground = 'red',
+                                                        command = self.reset)
+        # Button to start a single sweep
+        self.b_sweep = Button(fr_control, text = 'Sweep', height = 1, width = 3,
+                                                    activeforeground='red',
+                                                    command=self.single_sweep)
+        # Button to control actions
+        self.b_action = Button(fr_control, text = 'Cycle', height = 1, width = 3,
+                                                    activeforeground = 'red',
+                                                    command = self.cycle_sweep)
+        # Button to save data
+        self.b_save = Button(fr_control, text = 'Save', height = 1, width = 3,
+                                    activeforeground = 'red', state = NORMAL,
+                                                        command = self.save_canvas)
+
+        self.b_reset.grid(row = 0, column = 0)
+        self.b_sweep.grid(row = 0, column = 1)
+        self.b_action.grid(row = 0, column = 2)
+        self.b_save.grid(row = 0, column = 3)
+        canvas.update_idletasks()
+
+
+    def makemenu(self, win):
+        global root
+        top = Menu(win)
+        win.config(menu = top)    # set its menu option
+        m_file = Menu(top, tearoff = 0)
+        top.add_cascade(label = 'File', menu = m_file, underline = 0)
+        m_file.add_command(label = 'Load', command = self.file_load, underline = 0,
+                                                        accelerator = 'Ctrl+L')
+        m_file.add_command(label = 'Save', command = self.file_save, underline = 0,
+                                                        accelerator = 'Ctrl+S')
+        m_file.add_command(label = 'Exit', command = root.destroy, underline = 1,
+                                                        accelerator = 'Ctrl+Q')
+        opt = Menu(top, tearoff = 0)
+        top.add_cascade(label = 'Options', menu = opt, underline = 0)
+        opt.add_command(label = 'Background', command = self.getBackgroundColor,
+                                                                underline = 0)
+        opt.add_command(label = 'Foreground', command = self.getForegroundColor,
+                                                                underline = 0)
+        opt.add_separator()
+        opt.add_command(label = 'Chart Width', command = self.getChartWidth,
+                                                                underline = 6)
+        opt.add_command(label = 'Chart Height', command = self.getChartHeight,
+                                                                underline = 6)
+        opt.add_separator()
+        opt.add_command(label = 'X-divisions', command = self.getXdivisions,
+                                                                underline = 0)
+        opt.add_command(label = 'Y-divisions', command = self.getYdivisions,
+                                                                underline = 0)
+        help = Menu(top, tearoff = 0)
+        top.add_cascade(label = 'Help', menu = help, underline = 0)
+        help.add_command(label = 'Controls', command = self.showHelp, underline = 0)
+        help.add_command(label = 'About Wobbulator', command = self.showAbout,
+                                                                underline = 0)
+
+
+    def notDone(self):
+        messagebox.showerror('Not implemented', 'Not yet available')
+
+    def showHelp(self):
+        helpmsg = "\
+\nInput: [ 1 2 3 4 ]\n\
+- select the active input channel\n\
+\nGain: [ x1 x2 x4 x8 ]\n\
+- select input gain amplification\n\
+\nBPS: [ 18 16 14 12 ]\n\
+- bits per sample\n\
+\nColour: [ R M Y G B ]\n\
+- colour used to display trace\n\
+  Red Magenta Green Yellow Blue\n\
+\nOptions:\n\
+[Gr]  - Graticule display\n\
+[Cls] - Clear display at sweep start\n\
+[Rec] - Record sweeps for saving\n\
+[MS]  - Memory Store display\n\
+[CC]  - Colour Cycle after sweep\n\
+"
+
+        messagebox.showinfo('Help', helpmsg).pack()
+
+    def showAbout(self):
+        aboutmsg = "\
+   RPi Wobbulator v2.7.1-X\n\
+\n\
+   Copyright (C) 2013-2014\n\
+     Tom Herbison MI0IOU\n\
+\n\
+               Email:\n\
+tom@asliceofraspberrypi.co.uk\n\
+\n\
+               Web:\n\
+www.asliceofraspberrypi.co.uk\n\
+"
+
+        messagebox.showinfo('About RPi Wobbulator', aboutmsg)
+
+    def getForegroundColor(self):
+        fgColor = colorchooser.askcolor(params['canvFg'],
+                                            title = 'Foreground Color')
+        if fgColor[1] != 'None':
+            params['canvFg'] = fgColor[1]
+            self.canvFg = fgColor[1]
+
+    def getBackgroundColor(self):
+        bgColor = colorchooser.askcolor(params['canvBg'],
+                                            title = 'Background Color')
+        if bgColor[1] != 'None':
+            params['canvBg'] = bgColor[1]
+            self.canvBg = bgColor[1]
+
+    def getChartWidth(self):
+        chrtWid = simpledialog.askinteger('Chart Width', '300 to 1000',
+                                            initialvalue = params['chrtWid'],
+                                            minvalue = 300, maxvalue = 1000)
+        if chrtWid != 'None':
+            params['chrtWid'] = chrtWid
+            self.chrtWid = chrtWid
+
+    def getChartHeight(self):
+        chrtHt = simpledialog.askinteger('Chart Height', '300 to 1000',
+                                            initialvalue = params['chrtHt'],
+                                            minvalue = 300, maxvalue = 1000)
+        if chrtHt != 'None':
+            params['chrtHt'] = chrtHt
+            self.chrtHt = chrtHt
+
+    def getXdivisions(self):
+        xDivs = simpledialog.askinteger('X-divisions', '10-50',
+                                            initialvalue = params['xDivs'],
+                                            minvalue = 10, maxvalue = 50)
+        if xDivs != 'None':
+            params['xDivs'] = xDivs
+            self.xDivs = xDivs
+
+    def getYdivisions(self):
+        yDivs = simpledialog.askinteger('Y-divisions', '10-50',
+                                            initialvalue = params['yDivs'],
+                                            minvalue = 10, maxvalue = 50)
+        if yDivs != 'None':
+            params['yDivs'] = yDivs
+            self.yDivs = yDivs
+
+    def file_load(self):
+        filename = filedialog.askopenfilename()
+        if filename:
+            fname, fext = os.path.splitext(filename)
+            try:
+                dumpFile = open(filename, "rb")
+            except IOError:
+                messagebox.showerror('File Error', '!$*!%')
+                return
+            try:
+                dumpData = pickle.load(dumpFile)
+            except EOFError:
+                messagebox.showerror('File Error', 'File is empty!')
+                dumpFile.close()
+                return
+            except IOError:
+                dumpFile.close()
+            for key in dumpData:
+                print(str(key) + ' ' + str(dumpData[key]))
+
+    def file_save(self):
+        filename = filedialog.asksaveasfilename()
+        if filename:
+            fname, fext = os.path.splitext(filename)
+            if not fext:
+                fext = 'wtf' # wobbulator trace file
+
+        #try:
+            # determine file contents to save by filename extension
+        #except EOFError:
+        #    pass
+        #except IOError:
+        #    pass
+        #except:
+        #    pass
+        # FIXME: not enough try
+        dataFile = open(filename, "wb")
+        pickle.dump(self.buf_data, dataFile)
+        dataFile.close()
+
+    def initialise(self):
+        """ Initialise variables, buffers, and state """
+        self.memstore_reset()
+
+        self._oldstartfreq = 0 
+        self._oldstopfreq = 0
+        self._oldspan = 0
+        self._oldstep = 0
+
+        # Synchronise Hardware & GUI state\appearance
+        self.ipchan_update()
+        self.gain_update()
+        self.bitres_update()
+        self.clearscreen()
+        self.graticule_update()
+
+        #self._colour_iterator = self.colour_iterate()
+        self.colour_sync()
+
+        # perhaps better to invoke self.reset() and strip
+        # duplicated actions from this section
+
+        print("Initialised")
 
     # clear the screen
     def clearscreen(self):
-        chart = canvas.create_rectangle(self.mrgnLeft, self.mrgnTop,
-                                        self.mrgnLeft+self.chrtWid, self.mrgnTop+self.chrtHt,
-                                        fill=self.canvBg, outline=self.canvFg)
-        self.checkgrid()
+        """ reclaim and re-draw canvas area """
+        canvas.delete('plot')
+        self.memstore_reset()
+        self.label_yscale()
+        self.label_xscale()
+        self.graticule_update()
+        canvas.update_idletasks()
 
-    # display grid
-    def checkgrid(self):
-        checked = self.grid.get()
-        if checked == 1:
-                colour=self.canvFg
+    # display graticule
+    def graticule_update(self):
+        """ reclaim and re-draw graticule or label border """
+        canvas.delete('graticule')
+        if self.graticule.get():
+            # coarse division lines
+            xstep = int(self.chrtWid / self.xDivs)
+            for x in range(self.mrgnLeft, self.mrgnLeft + self.chrtWid + 1, xstep):
+                canvas.create_line(x, self.mrgnTop,
+                                        x, self.mrgnTop + self.chrtHt,
+                                        fill = self.canvFg, tag = 'graticule')
+            ystep = int(self.chrtHt/self.yDivs)
+            for y in range(self.mrgnTop, self.chrtHt + self.mrgnBotm, ystep):
+                canvas.create_line(self.mrgnLeft, y,
+                                        self.mrgnLeft + self.chrtWid, y,
+                                        fill = self.canvFg, tag = 'graticule')
+
+            # fine divisions along x and y centre lines only
+            x = self.mrgnLeft + int(self.chrtWid / 2) + 1
+            ystep = int(ystep / 5)
+            for y in range(self.mrgnTop, self.chrtHt + self.mrgnBotm - ystep, ystep):
+                canvas.create_line(x - 5, y, x + 4, y,
+                                        fill = self.canvFg, tag = 'graticule')
+
+            y = int(self.chrtHt / 2) + self.mrgnTop
+            xstep = int(xstep / 5)
+            for x in range(self.mrgnLeft, self.mrgnLeft + self.chrtWid + 1, xstep):
+                canvas.create_line(x, y - 4, x, y + 5,
+                                        fill = self.canvFg, tag = 'graticule')
         else:
-                colour=self.canvBg
-        for x in range(self.mrgnLeft, self.mrgnLeft+self.chrtWid+1, int(self.chrtWid/self.xDivs)):
-                canvas.create_line(x, self.mrgnTop, x, self.mrgnTop+self.chrtHt, fill=colour)
-        for y in range(self.mrgnTop, self.chrtHt+self.mrgnBotm, int(self.chrtHt/self.yDivs)):
-                canvas.create_line(self.mrgnLeft, y, self.chrtWid+self.mrgnLeft, y, fill=colour)
+            # border the scale labels
+            canvas.create_line(self.mrgnLeft, self.mrgnTop, self.mrgnLeft,
+                                        self.mrgnTop + self.chrtHt,
+                                        fill = self.canvFg, tag = 'graticule')
 
-    # display horizontal axis labels
-    def dispScales(self):
-        startF = float(fconv(self.fstart.get()))	
-        stopF = float(fconv(self.fstop.get()))	
+            y = self.chrtHt + self.mrgnTop
+            canvas.create_line(self.mrgnLeft, y, self.mrgnLeft + self.chrtWid,
+                                    y, fill = self.canvFg, tag = 'graticule')
+        canvas.update_idletasks()
+
+    def ipchan_update(self):
+        """ input channel change, effect and adjust y-scale labels """
+        ipchan = self._ipchan_option[self.ipchan.get()]
+        self.adc.set_ipchan(ipchan)
+        self.label_yscale()
+
+    def gain_update(self):
+        """ gain change, effect and adjust y-scale labels """
+        gain = self._gain_option[self.gainval.get()]
+        self.adc.set_gain(gain)
+        self.label_yscale()
+
+    def bitres_update(self):
+        """ bit resolution change, effect """
+        bitres = self._bitres_option[self.bitval.get()]
+        self.adc.set_bitres(bitres)
+
+    def colour_update(self):
+        """ colour change, synchronise colour cycling """
+        if self.colcyc.get():
+            self.colour_sync()
+
+    def record_update(self):
+        """ record sweep state change, placeholder """
+        pass
+
+    def memstore_update(self):
+        """ memory store state change """
+        if not self.memstore.get() and self.memstore_valid == True:
+            self.memstore_reset()
+            canvas.delete("plot")
+            # reclaiming plot tags may remove wanted trace
+            # not reclaiming plot tags may leave unwanted trace
+            # lose : lose
+
+    def colcyc_update(self):
+        """ colour cycling state change, synchronise colour cycling """
+        if self.colcyc.get():
+            self.colour_sync()
+
+    def fconv(self,f):	
+        """
+        convert frequency f to Hz and return as int value
+        e.g.: 10 MHz, 14.1m, 1k, 3.67 Mhz, 1.2 khz
+        """
+        try:
+            f = f.upper()	
+            if f.find("K") > 0:	
+                    return (int(float(f[:f.find("K")]) * 1000))	
+            elif f.find("M") > 0:	
+                    return (int(float(f[:f.find("M")]) * 1000000))	
+            else:	
+                    return (int(float(f)))	
+        except ValueError:
+            return 0
+
+    # FIXME do this the python way & ditch this 'C' function
+    def lblfmt(self,val):
+        stry = str(round(val, 6)).strip('0')
+        if stry[len(stry) - 1] == '.':
+            stry = stry + '0'
+        if stry[0] == '.':
+            stry = '0' + stry
+        return stry
+
+    def label_xscale(self):
+        """ reclaim and display x-axis labels """
+        startF = float(self.fconv(self.fstart.get()))	
+        stopF = float(self.fconv(self.fstop.get()))	
         if stopF > 1000000:
-            f0 = round((startF/1000000.0),1)
-            fN = round(stopF/1000000.0,1)
-            fDesc = 'MHz'
+            f0 = round(startF / 1000000.0, 3)
+            fN = round(stopF / 1000000.0, 3)
+            fDesc = 'x 1000000 (MHz)'
         elif stopF > 1000:
-            f0 = round(startF/1000.0,1)
-            fN = round(stopF/1000.0,1)
-            fDesc = 'kHz'
+            f0 = round(startF / 1000.0, 3)
+            fN = round(stopF / 1000.0, 3)
+            fDesc = 'x 1000 (kHz)'
         else:
-            f0 = round(startF/1.0,1)
-            fN = round(stopF/1.0,1)
-            fDesc = 'Hz'
+            f0 = round(startF / 1.0, 3)
+            fN = round(stopF / 1.0, 3)
+            fDesc = 'x 1 (Hz)'
 
-        canvas.create_rectangle(0, self.mrgnTop+self.chrtHt+1,
-                                self.canvWid+self.mrgnLeft, self.canvHt,
-                                fill=self.canvBg, outline=self.canvBg) #remove old X scale
-
-        fStep = (fN-f0)/self.xDivs
+        fStep = (fN - f0) / self.xDivs
         fLbls = ''
         f = f0
-        hWhere = (self.mrgnLeft/2)+18
+        hWhere = (self.mrgnLeft / 2) + 28
+        canvas.delete('hlabel')
         while f < fN:
-            hLbl = canvas.create_text(hWhere,self.canvHt-20, text="{0:10.2f}".format(f))
-            f = f + fStep
-            hWhere = hWhere+self.chrtWid/self.xDivs
-        hLbl = canvas.create_text(hWhere,self.canvHt-20, text='{0:10.2f}'.format(fN))
-        hWhere = ((self.mrgnLeft+self.chrtWid+self.mrgnRight) - len(fDesc)) / 2
-        hLbl = canvas.create_text(hWhere, self.canvHt-5, text=fDesc)
+            stry = self.lblfmt(f)
+            hLbl = canvas.create_text(hWhere, self.canvHt - 20, fill = self.canvFg,
+                                                    text = stry, tag = 'hlabel')
+            f = round(f + fStep, 6)
+            hWhere = hWhere + self.chrtWid / self.xDivs
+        stry = self.lblfmt(fN)
+        hLbl = canvas.create_text(hWhere, self.canvHt - 20, fill = self.canvFg,
+                                                    text = stry, tag = 'hlabel')
+        hWhere = (((self.mrgnLeft + self.chrtWid + self.mrgnRight) - len(fDesc))
+                                                                    / 2) + 26
+        hLbl = canvas.create_text(hWhere, self.canvHt - 5, fill = self.canvFg,
+                                                    text = fDesc, tag = 'hlabel')
+        canvas.update_idletasks()
 
-    # display vertical axis labels << new function
-    
-        canvas.create_rectangle(0, 0, self.mrgnLeft-1, self.canvHt-self.mrgnBotm,
-                                fill=self.canvBg, outline=self.canvBg)
-        gain = pow(2,(self.gainval.get()-140))
-        
-        if self.channel.get() == 1: # if Channel 2 is selected v2.7.1 - tgh
+    # display vertical axis labels
+    def label_yscale(self):
+        """ reclaim and display y-axis labels """
+        gain = self._gain_option[self.gainval.get()]
+        ipchan = self._ipchan_option[self.ipchan.get()]
+        if ipchan == 2:
+            # Channel 2 (log) is selected
             startV = float(-75)
-            stopV = float(-25) # scale change (was 25) v2.7.1 - tgh
+            stopV = float(-25)
             v0 = startV
-            vN = startV + 50/gain # scale change (was 100) v2.7.1 - tgh
+            vN = startV + 50 / gain
             vDesc = 'dBm'
-            vStep = (vN-v0)/self.yDivs
-            vLbls = ''
-            v = vN
-            vWhere = (self.mrgnBotm)/2 - 5
-            while v > v0:
-              vLbl = canvas.create_text(self.mrgnLeft-30, vWhere, text='{0:10.1f}'.format(v))
-              v = v - vStep
-              vWhere = vWhere+self.chrtHt/self.yDivs
-            vLbl = canvas.create_text(self.mrgnLeft-30, vWhere, text='{0:10.1f}'.format(v0))
-        else: # if Channel 2 is NOT selected v2.7.1 - tgh
+        else:
+            # Assume linear scale
             startV = float(0)
-            stopV = float(2.0) #  scale change << afa
+            stopV = float(2.0)
             v0 = startV
-            vN = stopV/gain
+            vN = stopV / gain
             vDesc = 'Volts'
-            vStep = (vN-v0)/self.yDivs
-            vLbls = ''
-            v = vN
-            vWhere = (self.mrgnBotm)/2 - 5
-            while v > v0:
-              vLbl = canvas.create_text(self.mrgnLeft-30, vWhere, text='{0:10.3f}'.format(v))
-              v = v - vStep
-              vWhere = vWhere+self.chrtHt/self.yDivs
-            vLbl = canvas.create_text(self.mrgnLeft-30, vWhere, text='{0:10.3f}'.format(v0))
-        vWhere = (self.chrtHt) / 2 - 6
-        vLbl = canvas.create_text(8, vWhere, text="\n".join(vDesc))
-        
-    # start frequency sweep
-    def sweep(self):
-        pulseHigh(RESET)
-        res = int(self.bitval.get())
-        address = int(self.gainval.get())- res # set resolution - tgh
-        channel = int(self.channel.get())
-        chip = adc_address
-        address = (address + (32 * channel))
-        startfreq = fconv(self.fstart.get())	 
-        stopfreq = fconv(self.fstop.get())	
-        span = (stopfreq-startfreq)
-        step = fconv(self.fstep.get())
-        #set scale and bias dep[ending on which channel is selected
-        if channel == 1: # # if Channel 2 is selected v2.7.1 - tgh
-            scale = 1 # set scale for plotting trace v2.7.1 - tgh
-            bias = ((getadcreading(chip, address, res)+getadcreading(chip, address, res))/2) # take a bias reading v2.7.1 - tgh
-        else: # if Channel 2 is NOT selected v2.7.1 - tgh
-            scale = 2 # set scale for plotting trace v2.7.1 - tgh
-            bias = 0 # set bias to zero
-        #  If a value has changed, only then refresh scales. This to avoid slowdown between sweeps    #<< added db
-        if self.oldstartfreq != startfreq or self.oldstopfreq != stopfreq or self.oldspan != span or self.oldstep != step:
-            self.dispScales()
-            self.oldstartfreq = startfreq 
-            self.oldstopfreq = stopfreq
-            self.oldspan = span
-            self.oldstep = step	
-        colour = str(self.colour.get())
-        if int(self.cls.get()):
-           self.clearscreen()
-        for frequency in range((startfreq - step), (stopfreq + step), step):
-            pulseHigh(RESET)
-            pulseHigh(W_CLK)
-            pulseHigh(FQ_UD)
-            sendFrequency(frequency)
-            reading = getadcreading(chip, address, res) 
-            x = int(self.chrtWid * ((frequency - startfreq) / span)) + self.mrgnLeft
-            y = int(self.chrtHt + self.mrgnTop - ((reading - bias) * self.chrtHt/scale)) # << bias and scale change v2.7.1 - tgh
-            if frequency > startfreq:
-                canvas.create_line(oldx, oldy, x, y, fill=colour)
-                canvas.update_idletasks() # new code to look like oscilloscope
-            oldx = x
-            oldy = y
-            if frequency == stopfreq:      #<< changed db
-                pulseHigh(RESET)
-                root.after(10, self.runsweep) # changed tgh
+        vStep = (vN - v0) / self.yDivs
+        vLbls = ''
+        v = vN
+        vWhere = (self.mrgnBotm / 2) - 5
+        canvas.delete('vlabel')
+        while v > v0:
+            stry = self.lblfmt(v)
+            vLbl = canvas.create_text( self.mrgnLeft - 25, vWhere,
+                                    fill = self.canvFg, text = stry, tag = 'vlabel')
+            v = v - vStep
+            vWhere = vWhere+self.chrtHt / self.yDivs
+            stry = self.lblfmt(v0)
+        vLbl = canvas.create_text(self.mrgnLeft - 25, vWhere,
+                                    fill = self.canvFg, text = stry, tag = 'vlabel')
+        vWhere = int((self.chrtHt - len(vDesc)) / 2) + self.mrgnTop
+        vLbl = canvas.create_text(8, vWhere, fill = self.canvFg,
+                                        text = "\n".join(vDesc), tag = 'vlabel')
+        canvas.update_idletasks()
 
-    # continuous sweep
+    def sweep(self):
+        """ perform frequency sweep """
+        # signal for the DDS to reset
+        self.dds.reset()
+
+        startfreq = self.fconv(self.fstart.get())	 
+        stopfreq = self.fconv(self.fstop.get())	
+        span = (stopfreq-startfreq)
+        step = self.fconv(self.fstep.get())
+        colour = str(self.colour.get())
+        ipchan = self._ipchan_option[self.ipchan.get()]
+
+        # changing channel invalidates all previous sweeps as below ?
+        #if self._oldipchan != ipchan:
+        #    self._oldipchan = ipchan
+
+        #  If a critical value has changed
+        if self._oldstartfreq != startfreq or self._oldstopfreq != stopfreq or self._oldspan != span or self._oldstep != step:
+            if (startfreq > stopfreq) or not span:
+                self.stopflag = True
+                root.after(10, self.runsweep)
+                return
+            self._oldstartfreq = startfreq 
+            self._oldstopfreq = stopfreq
+            self._oldspan = span
+            self._oldstep = step	
+            self.clearscreen()
+            if self.record.get():
+                # save a trace sweep header
+                # Need to handle the case of multiple traces
+                ddu = {'fstart' : startfreq, 'fstop' : stopfreq, 'fstep' : step}
+                self.buf_data.update(ddu)
+                ddu = {'colour' : colour}
+                self.buf_data.update(ddu)
+                ddu = {'Input' : ipchan}
+                self.buf_data.update(ddu)
+                gain = self._gain_option[self.gain.get()]
+                ddu = {'Gain' : gain}
+                self.buf_data.update(ddu)
+                bitres = self._bitres_option[self.bitval.get()]
+                ddu = {'BPS' : bitres}
+                self.buf_data.update(ddu)
+                ddu = {'Desc' : self.desc}
+                self.buf_data.update(ddu)
+        elif self.cls.get():
+            self.clearscreen()
+
+        #set scale and bias according to ipchan
+        if ipchan == 2:
+            # calculate bias from input when no frequency being output
+            self.plotbias = ((self.adc.read() + self.adc.read()) / 2)
+            self.plotscale = 1
+        else:
+            self.plotbias = 0
+            self.plotscale = 2
+
+        #tstart = time.time()
+
+        # graticule offset for x-coordinate start point
+        xstart = self.mrgnLeft
+
+        # y = int(self.chrtHt + self.mrgnTopr
+        #             - ((reading - self.plotbias) * self.chrtHt/self.plotscale))
+        """ simplify y-coordinate calulation for use inside the loop """
+        # y2 = self.chrtHt/self.plotscale
+        # y3 = self.chrtHt + self.mrgnTop
+        # y = int(y3 - ((reading - self.plotbias) * y2))
+        # re-write
+        # y = int(y3 - ((reading * y2) - (self.plotbias * y2)))
+        # y4 = (self.plotbias * y2)
+        # y = int(y3 - ((reading * y2) - y4))
+        # re-write
+        # y = int((y3 + y4) - (reading * y2))
+        # y1 = (y3 + y4)
+        # simplified equivalence
+        # y = int(y1 - (reading * y2))
+        y2 = int(self.chrtHt / self.plotscale)
+        y1 = int(self.chrtHt + self.mrgnTop + (self.plotbias * y2))
+
+        # Reset immediately before setting frequency
+        self.dds.reset()
+        # program the DDS to output the required frequency
+        self.dds.set_frequency(startfreq)
+        # compensate for errors in first readings related to a
+        # significant frequency jump and low bit resolution by
+        # throwing away a quantity inversely proportional to
+        # the bit resolution value i.e. 18:0, 16:1, 14:2, 12:3
+        for n in range(self.bitval.get()):
+            self.adc.read()
+        # take voltage reading
+        reading = self.adc.read()
+        # for y-coordinate start point
+        ystart = y1 - (reading * y2)
+
+        for frequency in range((startfreq + step), (stopfreq + step), step):
+            # Reset immediately before setting frequency
+            self.dds.reset()
+            # program the DDS to output the required frequency
+            self.dds.set_frequency(frequency)
+
+            if self.memstore_valid and not self.memstore.get():
+                # memory store valid and persistent trace not required
+                #if frequency in self.buf_memstore:
+                try:
+                    # remove it
+                    lineID = self.buf_memstore[frequency]
+                    canvas.delete(lineID)
+                except:
+                    raise ProgramError('Program error')
+
+            # take a reading at the required frequency
+            reading = self.adc.read()
+
+            # optionally record trace sweep data for later saving to file
+            if self.record.get():
+                ddu = { frequency : reading }
+                self.buf_data.update(ddu)
+                #print('Record:{}'.format(ddu))
+
+            # calculate x co-ordinate from the reading
+            xend = (int(self.chrtWid * ((frequency - startfreq) / span))
+                                                            + self.mrgnLeft)
+            # calculate y co-ordinate from the reading
+            yend = y1 - (reading * y2)
+
+            # plot the trace line
+            # FIXME: restrict plotting range to within graticule display area,
+            # any out-of-bounds plotting will also show up on any saved images
+            lineID = canvas.create_line(xstart, ystart, xend, yend,
+                                                fill = colour, tag = 'plot')
+            canvas.update_idletasks()
+
+            # record the trace handle for later individual removal
+            if not self.memstore.get():
+                ddu = { frequency : lineID }
+                self.buf_memstore.update(ddu)
+
+            xstart = xend
+            ystart = yend
+
+        # reset the DDS
+        self.dds.reset()
+
+        if not self.memstore.get():
+            # completed pass with memstore disabled
+            self.memstore_valid = True
+
+        if self.colcyc.get():
+            self.colour_next()
+
+        if self.record.get():
+            # completed pass with record enabled
+            self.record_valid = True
+
+        # FIXME: flush recorded 'buf_data' data as a set to file
+        # ready for next sweep.
+        # The next sweep will use the same 'frequency' key values
+        # and would otherwise overwrite the data.
+        # Alternatively save data as multiples of 'plot sets'
+
+        root.after(10, self.runsweep)
+        #tstop = time.time()
+        #print(str(int(tstop) - int(tstart)))
+
+    def colour_iterate(self):
+        """ generator for colour options """
+        for key, colour in self._colour_option.items():
+            self._cycle_colour = colour
+            yield key
+
+    def colour_cycle(self):
+        """ Return the next key in the colour cycle. """
+        while True:
+            try:
+                key = next(self._colour_iterator)
+                break
+            except StopIteration:
+                # hit the end, restart afresh at the beginning
+                self._colour_iterator = self.colour_iterate()
+            except TypeError:
+                # _colour_iterator is invalid
+                self._colour_iterator = self.colour_iterate()
+                # we should self.colour_sync()
+        return key
+
+    def colour_sync(self):
+        """ Syncronise the colour cycle to the User selected colour. """
+        while self._cycle_colour != self.colour.get():
+            self.colour_cycle()
+
+    def colour_next(self):
+        """ Set the active colour to the next colour in the cycle. """
+        key = self.colour_cycle()
+        self._colour_button[key].select()
+
+    def memstore_reset(self):
+        """
+        Wipe the memory store and flag as invalid.
+
+        Any references to previous trace sweep data is erased.
+        NOTE: the trace plot is not removed from the canvas.
+        """
+        self.memstore_valid = False
+        self.buf_memstore.clear()
+ 
     def runsweep(self):
+        """ perform sweeping or not, as required """
         if not self.stopflag:
             if self.oneflag:
                 self.stopflag = True
             self.sweep()
         else:
-            # change relief of button to show selected button
-            self.runbutton.config(relief=RAISED)
-            self.sweepbutton.config(relief=RAISED)
-            self.stopbutton.config(relief=SUNKEN)
+            self.dds.reset()
+            if self.oneflag:
+                self.b_sweep['text'] = 'Sweep'
+                self.b_sweep['command'] = self.single_sweep
+                self.b_action.config(state = NORMAL)
+            else:
+                self.b_action['text'] = 'Cycle'
+                self.b_action['command'] = self.cycle_sweep
+                self.b_sweep.config(state = NORMAL)
 
-    # initialize parameters for first sweep
-    def startsweep(self):                                          #<< new function db
-        self.stopbutton.config(relief=RAISED)
-        # Initial data to check when Scales need refresh
-        self.oldstartfreq = 0 
-        self.oldstopfreq = 0
-        self.oldspan = 0
-        self.oldstep = 0
+    def single_sweep(self):
+        """ start single sweep """
+        self.oneflag = True
         self.stopflag = False
+        self.b_sweep['text'] = 'Stop'
+        self.b_sweep['command'] = self.stop
+        self.b_action.config(state = DISABLED)
+        self.runsweep()
+        
+    def cycle_sweep(self):
+        """ start cyclic sweeps """
+        self.oneflag = False
+        self.stopflag = False
+        self.b_action['text'] = 'Stop'
+        self.b_action['command'] = self.stop
+        self.b_sweep.config(state = DISABLED)
         self.runsweep()
 
-    # start single sweep
-    def onesweep(self):                                       #<< new function db
-        self.sweepbutton.config(relief=SUNKEN)
-        self.oneflag = True
-        self.startsweep()
-        
-    # start sweep after clearing stop flag to prevent need for dubble click run button
-    def loopsweep(self):                                         #<< changed db
-        self.runbutton.config(relief=SUNKEN)
-        self.oneflag = False
-        self.startsweep()
-
-    # set stop flag
     def stop(self):
-        # change relief of button to show selected button     #<< added db
-        self.stopbutton.config(relief=SUNKEN)
-        self.dispScales()	
+        """ signal sweep(s) to stop """
         self.stopflag = True
+
+    def reset(self):
+        """ reset the display runtime variables """
+        self.dds.reset()
+        self._oldstartfreq = 0 
+        self._oldstopfreq = 0
+        self._oldspan = 0
+        self._oldstep = 0
+        self.clearscreen()
+        self.record_valid = False
+        self.buf_data.clear()
+        self.memstore_reset()
+
+    # FIXME: not enough try's
+    def save_canvas(self):
+        filename = filedialog.asksaveasfilename()
+        if filename:
+            fname, fext = os.path.splitext(filename)
+            if fext == '.pdf':
+                ftemp = tempfile.NamedTemporaryFile()
+                canvas.postscript(file = ftemp.name, colormode = 'color',
+                            pageheight = self.canvHt, pagewidth = self.canvWid)
+                ftemp.seek(0)
+                try:
+                    process = subprocess.Popen(["/usr/bin/ps2pdf",
+                                                ftemp.name, fname + '.pdf'])
+                except OSError:
+                    ftemp.close()
+                    messagebox.showerror('Conversion Error',
+                                        'please check "ps2pdf" is installed')
+                    return
+                process.wait()
+                ftemp.close()
+            elif fext == '.ps':
+                fn_ps = fname + '.ps'
+                canvas.postscript(file = fn_ps, colormode = 'color')
+            else:
+                messagebox.showerror('Bad file extension', 'Please specify ".ps" or ".pdf"')
+
 
 # Assign TK to root
 root = Tk()
-
 # Set main window title and menubar
-root.wm_title('RPi Wobbulator v2.7.1')
-makemenu(root)
-
+root.wm_title('RPi Wobbulator v2.7.1-X')
 # Create instance of class WobbyPi
 app = WobbyPi(root, params)
-
+app.makemenu(root)
+app.initialise()
 # Start main loop and wait for input from GUI
 root.mainloop()
 
 # When program stops, save user parameters
 paramFile = open(paramFN, "wb")
+params['version'] = version
 params['chrtHt'] = app.chrtHt
 params['chrtWid'] = app.chrtWid
 params['xDivs'] = app.xDivs
@@ -638,12 +1044,15 @@ params['canvBg'] = app.canvBg
 params['fBegin'] = str(app.fstart.get())
 params['fEnd'] = str(app.fstop.get())
 params['fIntvl'] = str(app.fstep.get())
-params['vgain'] = str(app.gainval.get())
-params['vchan'] = str(app.channel.get())
+params['vgain'] = str(app._gain_option[app.gainval.get()])
+params['vchan'] = str(app._ipchan_option[app.ipchan.get()])
 params['colour'] = app.colour.get()
+params['cc'] = str(app.colcyc.get())
+params['ms'] = str(app.memstore.get())
+params['rec'] = str(app.record.get())
 params['cls'] = str(app.cls.get())
-params['grid'] = str(app.grid.get())
-params['bits'] = str(app.bitval.get())
+params['grid'] = str(app.graticule.get())
+params['bits'] = str(app._bitres_option[app.bitval.get()])
 params = pickle.dump(params, paramFile)
 paramFile.close()
 
