@@ -128,14 +128,17 @@ class WobbyPi():
     dds = WobbyDDS()
 
     buf_data = {}
-    buf_memstore = {}
+    line_buffer = {}
 
-    _oldstartfreq = 0 
-    _oldstopfreq = 0
-    _oldspan = 0
-    _oldstep = 0
-    #_oldipchan
-    #_oldgain
+    _emit_startfreq = 0 
+    _emit_stopfreq = 0
+    _emit_stepfreq = 0
+    _emit_spanfreq = 0
+    _emit_ipchan = 0 
+    _emit_gain = 0
+    _emit_colour = 0
+
+    sweep_start_reqd = True
 
     #options_option = {0:[IntVar, 'Gr', 1, 0, self.grid, self.graticule_update],
     #                  1:[IntVar, 'Cls', 1, 0, self.cls, ()],
@@ -148,7 +151,10 @@ class WobbyPi():
 
     _colour_button = {}
     _colour_iterator = ()
-    _cycle_colour = 0
+
+    _sweep_iterator = ()
+
+    _callback_id = 0
 
     # Build Graphical User Interface
     def __init__(self, master, params):
@@ -270,10 +276,10 @@ class WobbyPi():
                                                 variable = self.memstore,
                                                 command = self.memstore_update)
 
-        # enable\disable memory store (for trace persistence)
+        # enable\disable colour cycling of trace
         cb_colcyc = Checkbutton(fr_cb, text = 'CC', onvalue = 1, offvalue = 0,
                                                    variable = self.colcyc,
-                                                   command = self.colcyc_update)
+                                                   command = self.colour_update)
 
         cb_graticule.grid(row = 0, column = 0, sticky = 'w')
         cb_clear.grid(row = 1, column = 0, sticky = 'w')
@@ -311,13 +317,7 @@ class WobbyPi():
         e_startf = Entry(fr_freq, textvariable = self.fstart, width = 8, )
         e_startf.grid(row = 0, column = 1)
         e_startf.insert(0, self.fBegin)
-
-        """
-        e_startf.bind('<Key-Return>', self.startf_change)
-
-        def startf_change(self, event):
-            print("Start Frequency:", self.e_startf.get())
-        """
+        e_startf.bind('<Key-Return>', self.freq_change)
 
         # stop frequency for sweep
         self.fstop = StringVar()
@@ -326,6 +326,7 @@ class WobbyPi():
         e_stopf = Entry(fr_freq, textvariable = self.fstop, width = 8)
         e_stopf.grid(row = 0, column = 3)
         e_stopf.insert(0, self.fEnd)
+        e_stopf.bind('<Key-Return>', self.freq_change)
 
         # increment for sweep
         fr_stepf = Label(fr_freq, text = ' Step:')
@@ -334,6 +335,7 @@ class WobbyPi():
         e_stepf = Entry(fr_freq, textvariable=self.fstep, width = 8)
         e_stepf.grid(row = 0, column = 5)
         e_stepf.insert(0, self.fIntvl)
+        e_stepf.bind('<Key-Return>', self.freq_change)
 
         # control panel frame
         fr_control = LabelFrame(frame, text = 'Control', labelanchor = 'n')
@@ -362,6 +364,15 @@ class WobbyPi():
         self.b_save.grid(row = 0, column = 3)
         canvas.update_idletasks()
 
+    def freq_change(self, event):
+        self.sweep_start_reqd = True
+        """ Potentially - fill step field with suitable value ? """
+        start = self.fconv(self.fstart.get())
+        stop = self.fconv(self.fstop.get())
+        span = stop - start
+        step = int(span / self.chrtWid)
+        # one pixel per step
+        print('Suggested Step:{} chrtWid:{}'.format(step, self.chrtWid))
 
     def makemenu(self, win):
         global root
@@ -398,7 +409,7 @@ class WobbyPi():
                                                                 underline = 0)
 
 
-    def notDone(self):
+    def not_done(self):
         messagebox.showerror('Not implemented', 'Not yet available')
 
     def showHelp(self):
@@ -419,8 +430,7 @@ class WobbyPi():
 [MS]  - Memory Store display\n\
 [CC]  - Colour Cycle after sweep\n\
 "
-
-        messagebox.showinfo('Help', helpmsg).pack()
+        messagebox.showinfo('Help', helpmsg)
 
     def showAbout(self):
         aboutmsg = "\
@@ -429,13 +439,12 @@ class WobbyPi():
    Copyright (C) 2013-2014\n\
      Tom Herbison MI0IOU\n\
 \n\
-               Email:\n\
+                   Email:\n\
 tom@asliceofraspberrypi.co.uk\n\
 \n\
-               Web:\n\
+                   HTTP:\n\
 www.asliceofraspberrypi.co.uk\n\
 "
-
         messagebox.showinfo('About RPi Wobbulator', aboutmsg)
 
     def getForegroundColor(self):
@@ -528,10 +537,13 @@ www.asliceofraspberrypi.co.uk\n\
         """ Initialise variables, buffers, and state """
         self.memstore_reset()
 
-        self._oldstartfreq = 0 
-        self._oldstopfreq = 0
-        self._oldspan = 0
-        self._oldstep = 0
+        _emit_startfreq = 0 
+        _emit_stopfreq = 0
+        _emit_stepfreq = 0
+        _emit_spanfreq = 0
+        _emit_ipchan = 0 
+        _emit_gain = 0
+        _emit_colour = 0
 
         # Synchronise Hardware & GUI state\appearance
         self.ipchan_update()
@@ -543,9 +555,10 @@ www.asliceofraspberrypi.co.uk\n\
         #self._colour_iterator = self.colour_iterate()
         self.colour_sync()
 
-        # perhaps better to invoke self.reset() and strip
-        # duplicated actions from this section
+        self.b_save.config(state = DISABLED)
 
+        # FIXME: better to invoke self.reset() and strip
+        # duplicated actions from this section
         print("Initialised")
 
     # clear the screen
@@ -603,12 +616,14 @@ www.asliceofraspberrypi.co.uk\n\
         ipchan = self._ipchan_option[self.ipchan.get()]
         self.adc.set_ipchan(ipchan)
         self.label_yscale()
+        self.sweep_start_reqd = True
 
     def gain_update(self):
         """ gain change, effect and adjust y-scale labels """
         gain = self._gain_option[self.gainval.get()]
         self.adc.set_gain(gain)
         self.label_yscale()
+        self.sweep_start_reqd = True
 
     def bitres_update(self):
         """ bit resolution change, effect """
@@ -616,13 +631,13 @@ www.asliceofraspberrypi.co.uk\n\
         self.adc.set_bitres(bitres)
 
     def colour_update(self):
-        """ colour change, synchronise colour cycling """
+        """ colour\cycling change, synchronise colour cycling """
         if self.colcyc.get():
             self.colour_sync()
 
     def record_update(self):
         """ record sweep state change, placeholder """
-        pass
+        self.not_done()
 
     def memstore_update(self):
         """ memory store state change """
@@ -632,11 +647,6 @@ www.asliceofraspberrypi.co.uk\n\
             # reclaiming plot tags may remove wanted trace
             # not reclaiming plot tags may leave unwanted trace
             # lose : lose
-
-    def colcyc_update(self):
-        """ colour cycling state change, synchronise colour cycling """
-        if self.colcyc.get():
-            self.colour_sync()
 
     def fconv(self,f):	
         """
@@ -655,29 +665,28 @@ www.asliceofraspberrypi.co.uk\n\
             return 0
 
     # FIXME do this the python way & ditch this 'C' function
-    def lblfmt(self,val):
-        stry = str(round(val, 6)).strip('0')
-        if stry[len(stry) - 1] == '.':
-            stry = stry + '0'
-        if stry[0] == '.':
-            stry = '0' + stry
-        return stry
+    # close but not quite, sometimes strips off one too many zero's
+    def lblfmt(self, val):
+        lbl = str('{0:02.3f}'.format(val)).rstrip('0')
+        if lbl[len(lbl) - 1] == '.':
+            lbl = lbl + '0'
+        return lbl
 
     def label_xscale(self):
         """ reclaim and display x-axis labels """
         startF = float(self.fconv(self.fstart.get()))	
         stopF = float(self.fconv(self.fstop.get()))	
         if stopF > 1000000:
-            f0 = round(startF / 1000000.0, 3)
-            fN = round(stopF / 1000000.0, 3)
+            f0 = round(startF / 1000000.0, 6)
+            fN = round(stopF / 1000000.0, 6)
             fDesc = 'x 1000000 (MHz)'
         elif stopF > 1000:
-            f0 = round(startF / 1000.0, 3)
-            fN = round(stopF / 1000.0, 3)
+            f0 = round(startF / 1000.0, 6)
+            fN = round(stopF / 1000.0, 6)
             fDesc = 'x 1000 (kHz)'
         else:
-            f0 = round(startF / 1.0, 3)
-            fN = round(stopF / 1.0, 3)
+            f0 = round(startF / 1.0, 6)
+            fN = round(stopF / 1.0, 6)
             fDesc = 'x 1 (Hz)'
 
         fStep = (fN - f0) / self.xDivs
@@ -738,47 +747,57 @@ www.asliceofraspberrypi.co.uk\n\
                                         text = "\n".join(vDesc), tag = 'vlabel')
         canvas.update_idletasks()
 
-    def sweep(self):
+    def sweep_start(self):
         """ perform frequency sweep """
-        # signal for the DDS to reset
-        self.dds.reset()
 
+        # Making changes via the GUI whilst running a sweep is now possible
+        # Changes made when cycling, before the sweep starts
+        # Start & Stop Frequency, Input Channel, Gain
+        # Changes made during a sweep
+        # Frequency Step, Bit Resolution, Trace Colour
+        # this list is not exhaustive, and all side-effects require handling
+
+        # FIXME: Handle changes made when cycling
         startfreq = self.fconv(self.fstart.get())	 
         stopfreq = self.fconv(self.fstop.get())	
-        span = (stopfreq-startfreq)
-        step = self.fconv(self.fstep.get())
-        colour = str(self.colour.get())
+        stepfreq = self.fconv(self.fstep.get())
         ipchan = self._ipchan_option[self.ipchan.get()]
+        gain = self._gain_option[self.gainval.get()]
 
         # changing channel invalidates all previous sweeps as below ?
-        #if self._oldipchan != ipchan:
-        #    self._oldipchan = ipchan
 
         #  If a critical value has changed
-        if self._oldstartfreq != startfreq or self._oldstopfreq != stopfreq or self._oldspan != span or self._oldstep != step:
-            if (startfreq > stopfreq) or not span:
-                self.stopflag = True
-                root.after(10, self.runsweep)
+        if (self.sweep_start_reqd or
+                                (self._emit_startfreq != startfreq) or
+                                    (self._emit_stopfreq != stopfreq) or
+                                        (self._emit_stepfreq != stepfreq)):
+            if (startfreq > stopfreq) or (stepfreq < 1):
+                self.invalid_sweep()
                 return
-            self._oldstartfreq = startfreq 
-            self._oldstopfreq = stopfreq
-            self._oldspan = span
-            self._oldstep = step	
+            self._emit_span = (stopfreq-startfreq)
+            self._emit_startfreq = startfreq 
+            self._emit_stopfreq = stopfreq
+            self._emit_stepfreq = stepfreq
+            self._emit_gain = gain
+            self._emit_ipchan = ipchan
             self.clearscreen()
+            self.sweep_start_reqd = False
             if self.record.get():
                 # save a trace sweep header
                 # Need to handle the case of multiple traces
-                ddu = {'fstart' : startfreq, 'fstop' : stopfreq, 'fstep' : step}
-                self.buf_data.update(ddu)
-                ddu = {'colour' : colour}
+                # FIXME: some of the below may change during sweep
+                ddu = {'fstart' : startfreq, 'fstop' : stopfreq,
+                                                        'fstep' : step}
                 self.buf_data.update(ddu)
                 ddu = {'Input' : ipchan}
                 self.buf_data.update(ddu)
-                gain = self._gain_option[self.gain.get()]
                 ddu = {'Gain' : gain}
                 self.buf_data.update(ddu)
+
                 bitres = self._bitres_option[self.bitval.get()]
                 ddu = {'BPS' : bitres}
+                self.buf_data.update(ddu)
+                ddu = {'colour' : colour}
                 self.buf_data.update(ddu)
                 ddu = {'Desc' : self.desc}
                 self.buf_data.update(ddu)
@@ -787,35 +806,39 @@ www.asliceofraspberrypi.co.uk\n\
 
         #set scale and bias according to ipchan
         if ipchan == 2:
+            # signal for the DDS to reset
+            self.dds.reset()
             # calculate bias from input when no frequency being output
-            self.plotbias = ((self.adc.read() + self.adc.read()) / 2)
-            self.plotscale = 1
+            plotbias = ((self.adc.read() + self.adc.read()) / 2)
+            plotscale = 1
         else:
-            self.plotbias = 0
-            self.plotscale = 2
-
-        #tstart = time.time()
+            plotbias = 0
+            plotscale = 2
 
         # graticule offset for x-coordinate start point
-        xstart = self.mrgnLeft
+        self.xstart = self.mrgnLeft
 
         # y = int(self.chrtHt + self.mrgnTopr
-        #             - ((reading - self.plotbias) * self.chrtHt/self.plotscale))
+        #             - ((reading - plotbias) * self.chrtHt/plotscale))
         """ simplify y-coordinate calulation for use inside the loop """
-        # y2 = self.chrtHt/self.plotscale
+        # y2 = self.chrtHt/plotscale
         # y3 = self.chrtHt + self.mrgnTop
-        # y = int(y3 - ((reading - self.plotbias) * y2))
+        # y = int(y3 - ((reading - plotbias) * y2))
         # re-write
-        # y = int(y3 - ((reading * y2) - (self.plotbias * y2)))
-        # y4 = (self.plotbias * y2)
+        # y = int(y3 - ((reading * y2) - (plotbias * y2)))
+        # y4 = (plotbias * y2)
         # y = int(y3 - ((reading * y2) - y4))
         # re-write
         # y = int((y3 + y4) - (reading * y2))
         # y1 = (y3 + y4)
         # simplified equivalence
         # y = int(y1 - (reading * y2))
-        y2 = int(self.chrtHt / self.plotscale)
-        y1 = int(self.chrtHt + self.mrgnTop + (self.plotbias * y2))
+        self.y2 = int(self.chrtHt / plotscale)
+        self.y1 = int(self.chrtHt + self.mrgnTop + (plotbias * self.y2))
+
+        """ simplify x-coordinate calulation for use inside the loop """
+        # x = int((chrtWid * ((frequency - startfreq) / span)) + mrgnLeft)
+        # My head hurts!
 
         # Reset immediately before setting frequency
         self.dds.reset()
@@ -830,26 +853,61 @@ www.asliceofraspberrypi.co.uk\n\
         # take voltage reading
         reading = self.adc.read()
         # for y-coordinate start point
-        ystart = y1 - (reading * y2)
+        self.ystart = self.y1 - (reading * self.y2)
+        # Initialise the frequency generator
+        # Deliberately overstep stopfreq to compensate for any rounding
+        # side-effects that may create a shortfall.
+        # Handle the overstep in sweep_continue.
+        self._sweep_iterator = self.sweep_iterate(startfreq + stepfreq,
+                                            stopfreq + stepfreq, stepfreq)
+        self.sweep_continue()
 
-        for frequency in range((startfreq + step), (stopfreq + step), step):
+    def sweep_continue(self):
+        """ time-share with GUI by returning after one plot """
+
+        # FIXME: Handle GUI changes made when sweeping
+        # start, stop, & step frequencies are fixed at sweep_start
+        # span is derived from start & stop frequencies
+        # bitres should be OK to change
+        # colour should be OK to change
+        # ipchan changes must be handled by sweep_start
+        # gain changes must be handled by sweep_start
+        """
+        ipchan = self._ipchan_option[self.ipchan.get()]
+        gain = self._gain_option[self.gainval.get()]
+        if self._emit_gain != gain or self._emit_ipchan != ipchan:
+        """
+        if self.sweep_start_reqd:
+            self._callback_id = root.after(1, self.sweep_start)
+            return
+
+        try:
+            frequency = next(self._sweep_iterator)
+        except StopIteration:
+            # should never happen
+            self.sweep_end()
+        else:
+            # correct any overstep
+            if frequency > self._emit_stopfreq:
+                frequency = self._emit_stopfreq
+
             # Reset immediately before setting frequency
             self.dds.reset()
             # program the DDS to output the required frequency
             self.dds.set_frequency(frequency)
-
-            if self.memstore_valid and not self.memstore.get():
-                # memory store valid and persistent trace not required
-                #if frequency in self.buf_memstore:
-                try:
-                    # remove it
-                    lineID = self.buf_memstore[frequency]
-                    canvas.delete(lineID)
-                except:
-                    raise ProgramError('Program error')
-
             # take a reading at the required frequency
             reading = self.adc.read()
+
+            #if not self.memstore.get() and self.memstore_valid:
+            if not self.memstore.get():
+                # memory store disabled
+                if frequency in self.line_buffer:
+                    # erase the part trace
+                    try:
+                        lineID = self.line_buffer[frequency]
+                        canvas.delete(lineID)
+                    except:
+                        raise ProgramError('Program error')
 
             # optionally record trace sweep data for later saving to file
             if self.record.get():
@@ -858,34 +916,40 @@ www.asliceofraspberrypi.co.uk\n\
                 #print('Record:{}'.format(ddu))
 
             # calculate x co-ordinate from the reading
-            xend = (int(self.chrtWid * ((frequency - startfreq) / span))
-                                                            + self.mrgnLeft)
+            xend = self.mrgnLeft + int(self.chrtWid *
+                                ((frequency - self._emit_startfreq) / self._emit_span))
             # calculate y co-ordinate from the reading
-            yend = y1 - (reading * y2)
+            yend = self.y1 - (reading * self.y2)
 
             # plot the trace line
             # FIXME: restrict plotting range to within graticule display area,
             # any out-of-bounds plotting will also show up on any saved images
-            lineID = canvas.create_line(xstart, ystart, xend, yend,
-                                                fill = colour, tag = 'plot')
-            canvas.update_idletasks()
+            lineID = canvas.create_line(self.xstart, self.ystart, xend, yend,
+                                        fill = self._emit_colour, tag = 'plot')
+            self.xstart = xend
+            self.ystart = yend
 
             # record the trace handle for later individual removal
-            if not self.memstore.get():
-                ddu = { frequency : lineID }
-                self.buf_memstore.update(ddu)
+            #if not (self.memstore.get() or self.cls.get()):
+            #ddu = { frequency : lineID }
+            self.line_buffer.update({frequency : lineID})
 
-            xstart = xend
-            ystart = yend
+            canvas.update_idletasks()
 
-        # reset the DDS
-        self.dds.reset()
+            if frequency < self._emit_stopfreq:
+                self._callback_id = root.after(1, self.sweep_continue)
+            else:
+                self.sweep_end()
 
-        if not self.memstore.get():
-            # completed pass with memstore disabled
+    def sweep_end(self):
+        # completed a full sweep
+
+        if not (self.memstore.get() or self.cls.get()):
+            # memort store disabled, flag for trace erasure
             self.memstore_valid = True
 
         if self.colcyc.get():
+            # cycle to next colour
             self.colour_next()
 
         if self.record.get():
@@ -898,14 +962,98 @@ www.asliceofraspberrypi.co.uk\n\
         # and would otherwise overwrite the data.
         # Alternatively save data as multiples of 'plot sets'
 
-        root.after(10, self.runsweep)
+        if self.oneflag:
+            # single sweep completed
+            self.single_stop()
+        else:
+            # schedule a fresh sweep
+            self._callback_id = root.after(1, self.sweep_start)
+
+
+    def sweep_iterate(self, start, finish, step):
+        for freq in range(start, finish, step):
+            yield freq
+
+    def single_stop(self):
+        self.b_sweep['text'] = 'Sweep'
+        self.b_sweep['command'] = self.single_sweep
+        self.b_action.config(state = NORMAL)
+        self.b_save.config(state = NORMAL)
         #tstop = time.time()
         #print(str(int(tstop) - int(tstart)))
+
+    def cycle_stop(self):
+        self.b_action['text'] = 'Cycle'
+        self.b_action['command'] = self.cycle_sweep
+        self.b_sweep.config(state = NORMAL)
+        # change cycling to single sweep
+        self.oneflag = True
+        self.b_sweep['text'] = 'Abort'
+        self.b_sweep['command'] = self.abort_sweep
+        self.b_action.config(state = DISABLED)
+
+    def single_sweep(self):
+        """ start single sweep """
+        #tstart = time.time()
+        self.oneflag = True
+        self.b_sweep['text'] = 'Abort'
+        self.b_sweep['command'] = self.abort_sweep
+        self.b_action.config(state = DISABLED)
+        self.b_save.config(state = DISABLED)
+        self.sweep_start()
+        
+    def cycle_sweep(self):
+        """ start cyclic sweeps """
+        self.oneflag = False
+        self.b_action['text'] = 'Stop'
+        self.b_action['command'] = self.cycle_stop
+        self.b_sweep.config(state = DISABLED)
+        self.b_save.config(state = DISABLED)
+        self.sweep_start()
+
+    def reset(self):
+        """ reset everything """
+        root.after_cancel(self._callback_id)
+        self.dds.reset()
+        self._emit_startfreq = 0 
+        self._emit_stopfreq = 0
+        self._emit_stepfreq = 0
+        self._emit_spanfreq = 0
+        self._emit_gain = 0
+        self._emit_ipchan = 0
+        self.clearscreen()
+        self.record_valid = False
+        self.buf_data.clear()
+        self.memstore_reset()
+        self.oneflag = False
+        self.b_action['text'] = 'Cycle'
+        self.b_action['command'] = self.cycle_sweep
+        self.b_sweep.config(state = NORMAL)
+        self.b_sweep['text'] = 'Sweep'
+        self.b_sweep['command'] = self.single_sweep
+        self.b_action.config(state = NORMAL)
+        self.b_save.config(state = DISABLED)
+
+    def abort_sweep(self):
+        self.reset()
+
+    def invalid_sweep(self):
+        """ stop and reset the runtime variables """
+        root.after_cancel(self._callback_id)
+        self.dds.reset()
+        self.oneflag = False
+        self.b_action['text'] = 'Cycle'
+        self.b_action['command'] = self.cycle_sweep
+        self.b_sweep.config(state = NORMAL)
+        self.b_sweep['text'] = 'Sweep'
+        self.b_sweep['command'] = self.single_sweep
+        self.b_action.config(state = NORMAL)
+
 
     def colour_iterate(self):
         """ generator for colour options """
         for key, colour in self._colour_option.items():
-            self._cycle_colour = colour
+            self._emit_colour = colour
             yield key
 
     def colour_cycle(self):
@@ -925,7 +1073,7 @@ www.asliceofraspberrypi.co.uk\n\
 
     def colour_sync(self):
         """ Syncronise the colour cycle to the User selected colour. """
-        while self._cycle_colour != self.colour.get():
+        while self._emit_colour != self.colour.get():
             self.colour_cycle()
 
     def colour_next(self):
@@ -941,61 +1089,14 @@ www.asliceofraspberrypi.co.uk\n\
         NOTE: the trace plot is not removed from the canvas.
         """
         self.memstore_valid = False
-        self.buf_memstore.clear()
+        self.line_buffer.clear()
  
-    def runsweep(self):
-        """ perform sweeping or not, as required """
-        if not self.stopflag:
-            if self.oneflag:
-                self.stopflag = True
-            self.sweep()
-        else:
-            self.dds.reset()
-            if self.oneflag:
-                self.b_sweep['text'] = 'Sweep'
-                self.b_sweep['command'] = self.single_sweep
-                self.b_action.config(state = NORMAL)
-            else:
-                self.b_action['text'] = 'Cycle'
-                self.b_action['command'] = self.cycle_sweep
-                self.b_sweep.config(state = NORMAL)
-
-    def single_sweep(self):
-        """ start single sweep """
-        self.oneflag = True
-        self.stopflag = False
-        self.b_sweep['text'] = 'Stop'
-        self.b_sweep['command'] = self.stop
-        self.b_action.config(state = DISABLED)
-        self.runsweep()
-        
-    def cycle_sweep(self):
-        """ start cyclic sweeps """
-        self.oneflag = False
-        self.stopflag = False
-        self.b_action['text'] = 'Stop'
-        self.b_action['command'] = self.stop
-        self.b_sweep.config(state = DISABLED)
-        self.runsweep()
-
-    def stop(self):
-        """ signal sweep(s) to stop """
-        self.stopflag = True
-
-    def reset(self):
-        """ reset the display runtime variables """
-        self.dds.reset()
-        self._oldstartfreq = 0 
-        self._oldstopfreq = 0
-        self._oldspan = 0
-        self._oldstep = 0
-        self.clearscreen()
-        self.record_valid = False
-        self.buf_data.clear()
-        self.memstore_reset()
-
     # FIXME: not enough try's
     def save_canvas(self):
+        self.b_action.config(state = DISABLED)
+        self.b_sweep.config(state = DISABLED)
+        self.b_reset.config(state = DISABLED)
+        self.b_save.config(state = DISABLED)
         filename = filedialog.asksaveasfilename()
         if filename:
             fname, fext = os.path.splitext(filename)
@@ -1011,6 +1112,10 @@ www.asliceofraspberrypi.co.uk\n\
                     ftemp.close()
                     messagebox.showerror('Conversion Error',
                                         'please check "ps2pdf" is installed')
+                    self.b_action.config(state = NORMAL)
+                    self.b_sweep.config(state = NORMAL)
+                    self.b_reset.config(state = NORMAL)
+                    self.b_save.config(state = NORMAL)
                     return
                 process.wait()
                 ftemp.close()
@@ -1019,6 +1124,10 @@ www.asliceofraspberrypi.co.uk\n\
                 canvas.postscript(file = fn_ps, colormode = 'color')
             else:
                 messagebox.showerror('Bad file extension', 'Please specify ".ps" or ".pdf"')
+        self.b_action.config(state = NORMAL)
+        self.b_sweep.config(state = NORMAL)
+        self.b_reset.config(state = NORMAL)
+        self.b_save.config(state = NORMAL)
 
 
 # Assign TK to root

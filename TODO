@@ -29,6 +29,17 @@ Wobby/ADC.py
 ~~~~~~~~~~~~~~
 WIP: Add __main__ with basic test routine
 
+Fix incorrect method naming:
+'write' is a 'simple' write that writes the given byte and nothing more.
+
+'read' is a 'complex' read, that is, it configures and then performs
+multiple accesses to resolve and return an absolute voltage value
+from the ADC.
+
+rename the 'simple' write to 'raw_write',
+create a companion simple read 'raw_read'.
+ 
+
 Add method to support ADC in continous conversion mode:
     need to be careful here, exactly 'how' is the User
     application going to want to use this ?
