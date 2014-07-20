@@ -16,6 +16,9 @@ Include 'Description' in image
 Format Help & About messagebox text
 Be consistent about 'Version', derive every occurrance from the same definition
 
+Consider:
+Trace removal could be more fine-grained by using trace colour as the tag
+
 DONE: Border vertical & horizontal scale labels when no graticule is displayed
 DONE: Only re-draw the affected vertical or horizontal scale, not both
 
@@ -29,15 +32,8 @@ Wobby/ADC.py
 ~~~~~~~~~~~~~~
 WIP: Add __main__ with basic test routine
 
-Fix incorrect method naming:
-'write' is a 'simple' write that writes the given byte and nothing more.
-
-'read' is a 'complex' read, that is, it configures and then performs
-multiple accesses to resolve and return an absolute voltage value
-from the ADC.
-
-rename the 'simple' write to 'raw_write',
-create a companion simple read 'raw_read'.
+DONE: rename the 'simple' write to 'raw_write',
+DONE: create a companion simple read 'raw_read'.
  
 
 Add method to support ADC in continous conversion mode:

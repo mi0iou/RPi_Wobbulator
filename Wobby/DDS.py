@@ -60,7 +60,8 @@ class DDS:
     # built-in initialisation method
     def __init__(self):
 
-        print("RPiWobbulator DDS API Library Module Version "+str(self._vernum))
+        print("RPiWobbulator DDS API Library Module Version " +
+                                                        str(self._vernum))
 
         # setup GPIO
         GPIO.setmode(GPIO.BOARD)
@@ -85,6 +86,8 @@ class DDS:
     def _pulse_high(self,pin):
         """
         Raise and Lower the defined GPIO pin.
+
+        Internal Method.
         """
         GPIO.output(pin, True)
         GPIO.output(pin, False)
@@ -93,6 +96,8 @@ class DDS:
     def _writeb(self,data):
         """
         Write a byte to the AD9850 DDS serially.
+
+        Internal Method.
         """
         for i in range (0,8):
             GPIO.output(_DDS_DATA, data & 0x01)
@@ -148,7 +153,8 @@ def main():
         sys.exit(code)
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:],'hvsx',['help', 'verbose', 'summary'])
+        opts, args = getopt.getopt(sys.argv[1:],
+                                    'hvsx', ['help', 'verbose', 'summary'])
     except getopt.GetoptError as err:
         usage(2, err)
 

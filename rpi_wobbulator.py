@@ -130,13 +130,16 @@ class WobbyPi():
     buf_data = {}
     line_buffer = {}
 
-    _emit_startfreq = 0 
+    # immutable variables
+    # these may not change during a sweep
+    _emit_startfreq = 0
     _emit_stopfreq = 0
     _emit_stepfreq = 0
     _emit_spanfreq = 0
-    _emit_ipchan = 0 
+    _emit_ipchan = 0
     _emit_gain = 0
-    _emit_colour = 0
+    _emit_colour = ''
+
 
     sweep_start_reqd = True
 
@@ -151,6 +154,7 @@ class WobbyPi():
 
     _colour_button = {}
     _colour_iterator = ()
+    _colour_cycle = ''
 
     _sweep_iterator = ()
 
@@ -166,9 +170,10 @@ class WobbyPi():
         # setup working parameters
         # system values
         self.mrgnLeft = 56
-        self.mrgnRight = 20 
-        self.mrgnTop = 10 
+        self.mrgnRight = 20
+        self.mrgnTop = 30
         self.mrgnBotm = 30
+
         # user values
         self.canvFg = params['canvFg']
         self.canvBg = params['canvBg']
@@ -299,13 +304,14 @@ class WobbyPi():
             cb_colcyc.select()
             
         # user description space
-        fr_desc = Label(frame, text = 'Description')
+        fr_desc = Label(frame, text = 'Desc.')
         fr_desc.grid(row = 7, column = 0, columnspan = 1)
 
         self.desc = StringVar()
-        e_desc = Entry(frame, width = 63, textvariable = self.desc)
+        e_desc = Entry(frame, width = 66, textvariable = self.desc)
         e_desc.grid(row = 7, column = 1, columnspan = 4)
-        
+        e_desc.bind('<Key-Return>', self.desc_change)
+
         # frequency entries
         fr_freq = LabelFrame(frame, text = 'Frequency (Hz)', labelanchor = 'n')
         fr_freq.grid(row = 8, column = 0, columnspan = 4)
@@ -364,6 +370,14 @@ class WobbyPi():
         self.b_save.grid(row = 0, column = 3)
         canvas.update_idletasks()
 
+    def desc_change(self, event):
+        """ Update the canvas with the description """
+        canvas.delete('desc')
+        xpos = self.mrgnLeft + (self.chrtWid / 2)
+        ypos = self.mrgnTop / 2
+        canvas.create_text(xpos, ypos, fill = self.canvFg, anchor = CENTER,
+                                        text = self.desc.get(), tag = 'desc')
+        
     def freq_change(self, event):
         self.sweep_start_reqd = True
         """ Potentially - fill step field with suitable value ? """
@@ -537,20 +551,19 @@ www.asliceofraspberrypi.co.uk\n\
         """ Initialise variables, buffers, and state """
         self.memstore_reset()
 
-        _emit_startfreq = 0 
-        _emit_stopfreq = 0
-        _emit_stepfreq = 0
-        _emit_spanfreq = 0
-        _emit_ipchan = 0 
-        _emit_gain = 0
-        _emit_colour = 0
+        self._emit_startfreq = 0 
+        self._emit_stopfreq = 0
+        self._emit_stepfreq = 0
+        self._emit_spanfreq = 0
+        self._emit_ipchan = 0 
+        self._emit_gain = 0
+        self._emit_colour = ''
 
         # Synchronise Hardware & GUI state\appearance
         self.ipchan_update()
         self.gain_update()
         self.bitres_update()
         self.clearscreen()
-        self.graticule_update()
 
         #self._colour_iterator = self.colour_iterate()
         self.colour_sync()
@@ -576,30 +589,41 @@ www.asliceofraspberrypi.co.uk\n\
         """ reclaim and re-draw graticule or label border """
         canvas.delete('graticule')
         if self.graticule.get():
-            # coarse division lines
+            # coarse division vertical lines
+            ystart = self.mrgnTop
+            yend = self.mrgnTop + self.chrtHt
             xstep = int(self.chrtWid / self.xDivs)
             for x in range(self.mrgnLeft, self.mrgnLeft + self.chrtWid + 1, xstep):
-                canvas.create_line(x, self.mrgnTop,
-                                        x, self.mrgnTop + self.chrtHt,
-                                        fill = self.canvFg, tag = 'graticule')
+                canvas.create_line(x, ystart, x, yend, fill = self.canvFg,
+                                                            tag = 'graticule')
+            # coarse division horizontal lines
+            xstart = self.mrgnLeft
+            xend = self.mrgnLeft + self.chrtWid
             ystep = int(self.chrtHt/self.yDivs)
-            for y in range(self.mrgnTop, self.chrtHt + self.mrgnBotm, ystep):
-                canvas.create_line(self.mrgnLeft, y,
-                                        self.mrgnLeft + self.chrtWid, y,
-                                        fill = self.canvFg, tag = 'graticule')
+            for y in range(self.mrgnTop, self.mrgnTop + self.chrtHt + 1, ystep):
+                canvas.create_line(xstart, y, xend, y, fill = self.canvFg,
+                                                            tag = 'graticule')
 
             # fine divisions along x and y centre lines only
-            x = self.mrgnLeft + int(self.chrtWid / 2) + 1
+            # fine division horizontal lines along vertical axis
+            x = self.mrgnLeft + int(self.chrtWid / 2)
+            xstart = x - 4
+            xend = x + 5
             ystep = int(ystep / 5)
-            for y in range(self.mrgnTop, self.chrtHt + self.mrgnBotm - ystep, ystep):
-                canvas.create_line(x - 5, y, x + 4, y,
-                                        fill = self.canvFg, tag = 'graticule')
+            for y in range(self.mrgnTop + ystep,
+                                self.mrgnTop + self.chrtHt + 1 - ystep, ystep):
+                canvas.create_line(xstart, y, xend, y, fill = self.canvFg,
+                                                            tag = 'graticule')
 
-            y = int(self.chrtHt / 2) + self.mrgnTop
+            # fine division vertical lines along horizontal axis
+            y = self.mrgnTop + int(self.chrtHt / 2)
+            ystart = y - 4
+            yend = y + 5
             xstep = int(xstep / 5)
-            for x in range(self.mrgnLeft, self.mrgnLeft + self.chrtWid + 1, xstep):
-                canvas.create_line(x, y - 4, x, y + 5,
-                                        fill = self.canvFg, tag = 'graticule')
+            for x in range(self.mrgnLeft + xstep,
+                            self.mrgnLeft + self.chrtWid + 1 - xstep, xstep):
+                canvas.create_line(x, ystart, x, yend, fill = self.canvFg,
+                                                            tag = 'graticule')
         else:
             # border the scale labels
             canvas.create_line(self.mrgnLeft, self.mrgnTop, self.mrgnLeft,
@@ -688,23 +712,24 @@ www.asliceofraspberrypi.co.uk\n\
             fN = round(stopF / 1.0, 6)
             fDesc = 'x 1 (Hz)'
 
-        fStep = (fN - f0) / self.xDivs
-        fLbls = ''
-        f = f0
-        hWhere = (self.mrgnLeft / 2) + 28
         canvas.delete('hlabel')
-        while f < fN:
-            stry = self.lblfmt(f)
-            hLbl = canvas.create_text(hWhere, self.canvHt - 20, fill = self.canvFg,
+
+        fStep = (fN - f0) / self.xDivs
+        xpos = (self.mrgnLeft / 2) + 28
+        ypos = self.mrgnTop + self.chrtHt + 8
+        while f0 < fN:
+            stry = self.lblfmt(f0)
+            canvas.create_text(xpos, ypos, fill = self.canvFg,
                                                     text = stry, tag = 'hlabel')
-            f = round(f + fStep, 6)
-            hWhere = hWhere + self.chrtWid / self.xDivs
+            f0 = round(f0 + fStep, 6)
+            xpos = xpos + (self.chrtWid / self.xDivs)
         stry = self.lblfmt(fN)
-        hLbl = canvas.create_text(hWhere, self.canvHt - 20, fill = self.canvFg,
+        canvas.create_text(xpos, ypos, fill = self.canvFg,
                                                     text = stry, tag = 'hlabel')
-        hWhere = (((self.mrgnLeft + self.chrtWid + self.mrgnRight) - len(fDesc))
+        # display the horizontal axis label
+        xpos = (((self.mrgnLeft + self.chrtWid + self.mrgnRight) - len(fDesc))
                                                                     / 2) + 26
-        hLbl = canvas.create_text(hWhere, self.canvHt - 5, fill = self.canvFg,
+        canvas.create_text(xpos, ypos + 15, fill = self.canvFg,
                                                     text = fDesc, tag = 'hlabel')
         canvas.update_idletasks()
 
@@ -717,33 +742,34 @@ www.asliceofraspberrypi.co.uk\n\
             # Channel 2 (log) is selected
             startV = float(-75)
             stopV = float(-25)
-            v0 = startV
             vN = startV + 50 / gain
             vDesc = 'dBm'
         else:
             # Assume linear scale
             startV = float(0)
             stopV = float(2.0)
-            v0 = startV
             vN = stopV / gain
             vDesc = 'Volts'
-        vStep = (vN - v0) / self.yDivs
-        vLbls = ''
-        v = vN
-        vWhere = (self.mrgnBotm / 2) - 5
+
         canvas.delete('vlabel')
-        while v > v0:
-            stry = self.lblfmt(v)
-            vLbl = canvas.create_text( self.mrgnLeft - 25, vWhere,
-                                    fill = self.canvFg, text = stry, tag = 'vlabel')
-            v = v - vStep
-            vWhere = vWhere+self.chrtHt / self.yDivs
-            stry = self.lblfmt(v0)
-        vLbl = canvas.create_text(self.mrgnLeft - 25, vWhere,
-                                    fill = self.canvFg, text = stry, tag = 'vlabel')
-        vWhere = int((self.chrtHt - len(vDesc)) / 2) + self.mrgnTop
-        vLbl = canvas.create_text(8, vWhere, fill = self.canvFg,
-                                        text = "\n".join(vDesc), tag = 'vlabel')
+
+        vStep = (vN - startV) / self.yDivs
+        xpos = self.mrgnLeft - 25
+        ypos = self.mrgnTop
+        while vN > startV:
+            stry = self.lblfmt(vN)
+            canvas.create_text( xpos, ypos, fill = self.canvFg,
+                                                text = stry, tag = 'vlabel')
+            vN = vN - vStep
+            ypos = ypos + (self.chrtHt / self.yDivs)
+        stry = self.lblfmt(startV)
+        canvas.create_text(xpos, ypos, fill = self.canvFg,
+                                                text = stry, tag = 'vlabel')
+        # write the vertical label
+        xpos = self.mrgnLeft - 48
+        ypos = int((self.chrtHt - len(vDesc)) / 2) + self.mrgnTop
+        canvas.create_text(xpos, ypos, fill = self.canvFg,
+                                    text = "\n".join(vDesc), tag = 'vlabel')
         canvas.update_idletasks()
 
     def sweep_start(self):
@@ -762,6 +788,7 @@ www.asliceofraspberrypi.co.uk\n\
         stepfreq = self.fconv(self.fstep.get())
         ipchan = self._ipchan_option[self.ipchan.get()]
         gain = self._gain_option[self.gainval.get()]
+        self._emit_colour = self._colour_cycle
 
         # changing channel invalidates all previous sweeps as below ?
 
@@ -846,8 +873,10 @@ www.asliceofraspberrypi.co.uk\n\
         # compensate for errors in first readings related to a
         # significant frequency jump and low bit resolution by
         # throwing away a quantity inversely proportional to
-        # the bit resolution value i.e. 18:0, 16:1, 14:2, 12:3
-        for n in range(self.bitval.get()):
+        # the bit resolution key value i.e. 0:18, 1:16, 2:14, 3:12
+        _magic = self.bitval.get() + 2
+        for n in range(_magic * _magic):
+            # 18>4 16>9 14>16 12>25
             self.adc.read()
         # take voltage reading
         reading = self.adc.read()
@@ -864,19 +893,8 @@ www.asliceofraspberrypi.co.uk\n\
     def sweep_continue(self):
         """ time-share with GUI by returning after one plot """
 
-        # FIXME: Handle GUI changes made when sweeping
-        # start, stop, & step frequencies are fixed at sweep_start
-        # span is derived from start & stop frequencies
-        # bitres should be OK to change
-        # colour should be OK to change
-        # ipchan changes must be handled by sweep_start
-        # gain changes must be handled by sweep_start
-        """
-        ipchan = self._ipchan_option[self.ipchan.get()]
-        gain = self._gain_option[self.gainval.get()]
-        if self._emit_gain != gain or self._emit_ipchan != ipchan:
-        """
         if self.sweep_start_reqd:
+            # GUI changes flagged a sweep_start is required
             self._callback_id = root.after(1, self.sweep_start)
             return
 
@@ -909,6 +927,7 @@ www.asliceofraspberrypi.co.uk\n\
                         raise ProgramError('Program error')
 
             # optionally record trace sweep data for later saving to file
+            # FIXME: this should be immutable during a sweep
             if self.record.get():
                 ddu = { frequency : reading }
                 self.buf_data.update(ddu)
@@ -916,24 +935,34 @@ www.asliceofraspberrypi.co.uk\n\
 
             # calculate x co-ordinate from the reading
             xend = self.mrgnLeft + int(self.chrtWid *
-                                ((frequency - self._emit_startfreq) / self._emit_span))
+                        ((frequency - self._emit_startfreq) / self._emit_span))
             # calculate y co-ordinate from the reading
             yend = self.y1 - (reading * self.y2)
 
             # plot the trace line
-            # FIXME: restrict plotting range to within graticule display area,
-            # any out-of-bounds plotting will also show up on any saved images
-            lineID = canvas.create_line(self.xstart, self.ystart, xend, yend,
-                                        fill = self._emit_colour, tag = 'plot')
+            # restrict plotting range to within graticule display area, any
+            # out-of-bounds plotting will also show up on any saved images
+
+            if (self.ystart > self.mrgnTop) and (yend < self.mrgnTop):
+                # plotting up the display, clamp the end
+                yend = self.mrgnTop
+                #print('clamping:{}'.format(yend))
+            elif (self.ystart < self.mrgnTop) and (yend > self.mrgnTop):
+                # plotting down the display, clamp the start
+                self.ystart = self.mrgnTop
+                #print('unclamping:{}'.format(yend))
+
+            if (self.ystart > self.mrgnTop) or (yend > self.mrgnTop):
+                # both ends are in range, one may have been clamped
+                lineID = canvas.create_line(self.xstart, self.ystart,
+                            xend, yend, fill = self._emit_colour, tag = 'plot')
+                # record the trace handle for later individual removal
+                self.line_buffer.update({frequency : lineID})
+
+                canvas.update_idletasks()
+
             self.xstart = xend
             self.ystart = yend
-
-            # record the trace handle for later individual removal
-            #if not (self.memstore.get() or self.cls.get()):
-            #ddu = { frequency : lineID }
-            self.line_buffer.update({frequency : lineID})
-
-            canvas.update_idletasks()
 
             if frequency < self._emit_stopfreq:
                 self._callback_id = root.after(1, self.sweep_continue)
@@ -1052,7 +1081,7 @@ www.asliceofraspberrypi.co.uk\n\
     def colour_iterate(self):
         """ generator for colour options """
         for key, colour in self._colour_option.items():
-            self._emit_colour = colour
+            self._colour_cycle = colour
             yield key
 
     def colour_cycle(self):
@@ -1072,12 +1101,13 @@ www.asliceofraspberrypi.co.uk\n\
 
     def colour_sync(self):
         """ Syncronise the colour cycle to the User selected colour. """
-        while self._emit_colour != self.colour.get():
+        while self._colour_cycle != self.colour.get():
             self.colour_cycle()
 
     def colour_next(self):
         """ Set the active colour to the next colour in the cycle. """
         key = self.colour_cycle()
+        # Be careful, select() not invoke()
         self._colour_button[key].select()
 
     def memstore_reset(self):

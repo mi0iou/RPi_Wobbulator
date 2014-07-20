@@ -43,7 +43,7 @@ class ADC:
     _sernum = 20140701
 
     # Version 0 Revision 2
-    _vernum = 0.2
+    _vernum = 0.3
 
     # FIXME: report supported hardware
     """
@@ -126,7 +126,8 @@ class ADC:
     def __init__(self):
         """Prepare to perform hardware access."""
 
-        print("RPiWobbulator ADC API Library Module Version "+str(self._vernum))
+        print("RPiWobbulator ADC API Library Module Version " + 
+                                                        str(self._vernum))
 
         # prepare GPIO
         GPIO.setmode(GPIO.BOARD)
@@ -167,7 +168,7 @@ class ADC:
 
         contconv = self._mapcontconv[self._adc_contconv]
         ipchan = self._mapipchan[self._adc_ipchan]
-        self._adc_config = gain + sps_bitres + contconv + ipchan + self._ADC_RDY 
+        self._adc_config = gain + sps_bitres + contconv + ipchan + self._ADC_RDY
         return
 
     def set_gain(self, gain):
@@ -179,7 +180,8 @@ class ADC:
         """
         if self._adc_gain != gain:
             if gain not in self._mapgain.keys():
-                raise ValueError('Invalid argument:{} not in {}'.format(gain,self._mapgain.keys()))
+                raise ValueError('Invalid argument:{} not in {}'.format(
+                                                    gain,self._mapgain.keys()))
             self._adc_gain = gain
             self._config_update()
         return
@@ -195,7 +197,8 @@ class ADC:
         """
         if (self._adc_sps != 0) or (self._adc_bitres != bitres):
             if bitres not in self._mapbitres.keys():
-                raise ValueError('Invalid argument:{} not in {}'.format(bitres,self._mapbitres.keys()))
+                raise ValueError('Invalid argument:{} not in {}'.format(
+                                                bitres,self._mapbitres.keys()))
             self._adc_bitres = bitres
             self._adc_sps = 0
             self._config_update()
@@ -212,7 +215,8 @@ class ADC:
         """
         if (self._adc_bitres != 0 or self._adc_sps != sps):
             if sps not in self._mapsps.keys():
-                raise ValueError('Invalid argument:{} not in {}'.format(sps,self._mapsps.keys()))
+                raise ValueError('Invalid argument:{} not in {}'.format(
+                                                    sps,self._mapsps.keys()))
             self._adc_sps = sps
             self._adc_bitres = 0
             self._config_update()
@@ -221,8 +225,8 @@ class ADC:
     def set_contconv(self, contconv):
         """
         Set or Clear the 'continuous flag'to be used during ADC conversion.
-        If clear, on a 'read' the ADC will perform one conversion and stop.
-        If set, the ADC repeatedly performs conversions until explicitly stopped.
+        If clear, on a 'read' the ADC will perform one conversion and stop, if
+        set, the ADC repeatedly performs conversions until explicitly stopped.
 
         Valid argument values: 0, or !0
         Return: nothing
@@ -246,7 +250,8 @@ class ADC:
         """
         if self._adc_ipchan != ipchan:
             if ipchan not in self._mapipchan.keys():
-                raise ValueError('Invalid argument:{} not in {}'.format(ipchan,self._mapipchan.keys()))
+                raise ValueError('Invalid argument:{} not in {}'.format(
+                                            ipchan,self._mapipchan.keys()))
             self._adc_ipchan = ipchan
             self._config_update()
         return
@@ -306,7 +311,7 @@ class ADC:
         # nothing to be done
         return
 
-    def write(self, adc_data):
+    def raw_write(self, adc_data):
         """
         Method to directly write a byte to the ADC.
 
@@ -318,6 +323,18 @@ class ADC:
         self._bus.transaction(i2c.writing_bytes(self._adc_address, adc_data))
         return
 
+    def raw_read(self, reads):
+        """
+        Method to directly read byte(s) from the ADC.
+
+        Argument: number of bytes to read
+        Return: byte(s) read
+
+        Use of this Method is strongly discouraged as it could cause
+        side-effects, potentially resulting in a lock-up.
+        """
+        return self._bus.transaction(i2c.reading(self._adc_address, reads))[0]
+
     def read(self):
         """
         Method to take a single reading from the ADC.
@@ -327,11 +344,14 @@ class ADC:
         Writes the local configuration byte to the ADC and then blocks until
         the ADC has completed one conversion which is then read and returned.
         """
-        self._bus.transaction(i2c.writing_bytes(self._adc_address, self._adc_config))
+        self._bus.transaction(i2c.writing_bytes(self._adc_address,
+                                                            self._adc_config))
         if (self._adc_bitres == 18):
-            h, m, l ,s = self._bus.transaction(i2c.reading(self._adc_address,4))[0]
+            h, m, l ,s = self._bus.transaction(i2c.reading(
+                                                    self._adc_address, 4))[0]
             while (s & 128):
-                h, m, l, s  = self._bus.transaction(i2c.reading(self._adc_address,4))[0]
+                h, m, l, s  = self._bus.transaction(i2c.reading(
+                                                    self._adc_address, 4))[0]
             # shift bits to produce result
             t = ((h & 0b00000001) << 16) | (m << 8) | l
             # check if positive or negative number and invert if needed
@@ -339,9 +359,11 @@ class ADC:
                 t = ~(0x020000 - t)
             return (t/64000)
         else:
-            m, l ,s = self._bus.transaction(i2c.reading(self._adc_address,3))[0]
+            m, l ,s = self._bus.transaction(i2c.reading(
+                                                    self._adc_address, 3))[0]
             while (s & 128):
-                m, l, s  = self._bus.transaction(i2c.reading(self._adc_address,3))[0]
+                m, l, s  = self._bus.transaction(i2c.reading(
+                                                    self._adc_address, 3))[0]
             # shift bits to produce result
             t = (m << 8) | l
             # check if positive or negative number and invert if needed
@@ -392,7 +414,8 @@ def main():
         sys.exit(code)
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:],'hvsx',['help', 'verbose', 'summary'])
+        opts, args = getopt.getopt(sys.argv[1:],
+                                    'hvsx', ['help', 'verbose', 'summary'])
     except getopt.GetoptError as err:
         usage(2, err)
 
