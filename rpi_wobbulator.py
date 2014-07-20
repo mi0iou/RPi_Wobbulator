@@ -632,8 +632,7 @@ www.asliceofraspberrypi.co.uk\n\
 
     def colour_update(self):
         """ colour\cycling change, synchronise colour cycling """
-        if self.colcyc.get():
-            self.colour_sync()
+        self.colour_sync()
 
     def record_update(self):
         """ record sweep state change, placeholder """
