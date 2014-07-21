@@ -140,6 +140,8 @@ class WobbyPi():
     _emit_gain = 0
     _emit_colour = ''
 
+    # postscript will change the font but keep the pixelsize
+    text_font = ('clean','8')
 
     sweep_start_reqd = True
 
@@ -162,6 +164,15 @@ class WobbyPi():
 
     # Build Graphical User Interface
     def __init__(self, master, params):
+
+        optiontkfonts = { 'TkCaptionFont', 'TkSmallCaptionFont', 'TkTooltipFont',
+                                'TkFixedFont', 'TkHeadingFont', 'TkMenuFont',
+                                'TkIconFont', 'TkTextFont', 'TkDefaultFont' }
+
+        for opt in optiontkfonts:
+            root.tk.call('font', 'configure', opt, '-family', self.text_font[0],
+                                                    '-size', self.text_font[1])
+
         frame = Frame(master, bd=10)
         frame.pack(fill=BOTH,expand=1)
 
@@ -311,6 +322,8 @@ class WobbyPi():
         e_desc = Entry(frame, width = 66, textvariable = self.desc)
         e_desc.grid(row = 7, column = 1, columnspan = 4)
         e_desc.bind('<Key-Return>', self.desc_change)
+        e_desc.insert(0, 'Mouse-Left-Click exactly on the sweep trace')
+        self.desc_change(0)
 
         # frequency entries
         fr_freq = LabelFrame(frame, text = 'Frequency (Hz)', labelanchor = 'n')
@@ -790,13 +803,10 @@ www.asliceofraspberrypi.co.uk\n\
         gain = self._gain_option[self.gainval.get()]
         self._emit_colour = self._colour_cycle
 
-        # changing channel invalidates all previous sweeps as below ?
-
         #  If a critical value has changed
-        if (self.sweep_start_reqd or
-                                (self._emit_startfreq != startfreq) or
-                                    (self._emit_stopfreq != stopfreq) or
-                                        (self._emit_stepfreq != stepfreq)):
+        if (self.sweep_start_reqd or (self._emit_startfreq != startfreq) or
+                                        (self._emit_stopfreq != stopfreq) or
+                                            (self._emit_stepfreq != stepfreq)):
             if (startfreq > stopfreq) or (stepfreq < 1):
                 self.invalid_sweep()
                 return
@@ -830,7 +840,7 @@ www.asliceofraspberrypi.co.uk\n\
         elif self.cls.get():
             self.clearscreen()
 
-        #set scale and bias according to ipchan
+        # scale and bias are dependant on input channel
         if ipchan == 2:
             # signal for the DDS to reset
             self.dds.reset()
@@ -859,12 +869,22 @@ www.asliceofraspberrypi.co.uk\n\
         # y1 = (y3 + y4)
         # simplified equivalence
         # y = int(y1 - (reading * y2))
-        self.y2 = int(self.chrtHt / plotscale)
-        self.y1 = int(self.chrtHt + self.mrgnTop + (plotbias * self.y2))
+        self.y2 = (self.chrtHt / plotscale)
+        self.y1 = (self.chrtHt + self.mrgnTop + (plotbias * self.y2))
 
         """ simplify x-coordinate calulation for use inside the loop """
         # x = int((chrtWid * ((frequency - startfreq) / span)) + mrgnLeft)
-        # My head hurts!
+        # x = int((chrtWid * ((frequency / span) - (startfreq/ span))) + mrgnLeft)
+        # x = int(((chrtWid * (frequency / span)) - (chrtWid * (startfreq / span))) + mrgnLeft)
+        # x = int((chrtWid * (frequency / span)) - ((chrtWid * (startfreq / span)) - mrgnLeft))
+        # x2 = ((chrtWid * (startfreq / span)) - mrgnLeft)
+        # x = int((chrtWid * (frequency / span)) - x2)
+        # x = int(((chrtWid / span) * frequency) - x2)
+        # x1 = (chrtWid / span)
+        # x = int((x1 * frequency) - x2)
+        self.x2 = ((self.chrtWid * (startfreq / self._emit_span))
+                                                            - self.mrgnLeft)
+        self.x1 = (self.chrtWid / self._emit_span)
 
         # Reset immediately before setting frequency
         self.dds.reset()
@@ -934,28 +954,25 @@ www.asliceofraspberrypi.co.uk\n\
                 #print('Record:{}'.format(ddu))
 
             # calculate x co-ordinate from the reading
-            xend = self.mrgnLeft + int(self.chrtWid *
-                        ((frequency - self._emit_startfreq) / self._emit_span))
+            xend = int((self.x1 * frequency) - self.x2)
             # calculate y co-ordinate from the reading
-            yend = self.y1 - (reading * self.y2)
+            yend = int(self.y1 - (reading * self.y2))
 
-            # plot the trace line
             # restrict plotting range to within graticule display area, any
             # out-of-bounds plotting will also show up on any saved images
-
             if (self.ystart > self.mrgnTop) and (yend < self.mrgnTop):
                 # plotting up the display, clamp the end
                 yend = self.mrgnTop
-                #print('clamping:{}'.format(yend))
             elif (self.ystart < self.mrgnTop) and (yend > self.mrgnTop):
                 # plotting down the display, clamp the start
                 self.ystart = self.mrgnTop
-                #print('unclamping:{}'.format(yend))
 
+            # plot the trace line
             if (self.ystart > self.mrgnTop) or (yend > self.mrgnTop):
                 # both ends are in range, one may have been clamped
                 lineID = canvas.create_line(self.xstart, self.ystart,
-                            xend, yend, fill = self._emit_colour, tag = 'plot')
+                    xend, yend, fill = self._emit_colour, tag = 'plot')
+
                 # record the trace handle for later individual removal
                 self.line_buffer.update({frequency : lineID})
 
@@ -971,6 +988,9 @@ www.asliceofraspberrypi.co.uk\n\
 
     def sweep_end(self):
         # completed a full sweep
+
+        canvas.tag_bind('plot', "<1>", self.mouse_leftdown)
+        canvas.tag_bind('plot', "<B1-ButtonRelease>", self.mouse_leftup)
 
         if not (self.memstore.get() or self.cls.get()):
             # memort store disabled, flag for trace erasure
@@ -1077,6 +1097,27 @@ www.asliceofraspberrypi.co.uk\n\
         self.b_sweep['command'] = self.single_sweep
         self.b_action.config(state = NORMAL)
 
+    def mouse_leftdown(self, event):
+        # calculate frequency from the x co-ordinate
+        # x2 = ((chrtWid * (startfreq / span)) - mrgnLeft)
+        # x1 = (chrtWid / span)
+        # x = int((x1 * frequency) - x2)
+        # frequency = (x + x2) / x1
+        f = int((event.x + self.x2) / self.x1)
+        # calculate voltage reading from the y co-ordinate
+        # self.y2 = (self.chrtHt / plotscale)
+        # self.y1 = (self.chrtHt + self.mrgnTop + (plotbias * self.y2))
+        # y = int(self.y1 - (reading * self.y2))
+        # voltage = (y1 - y) / y2
+        v = ((self.y1 - event.y) / self.y2) / self._emit_gain
+        vhstr = 'Volts:{}\nHertz:{}'.format(v, f)
+        # FIXME: automate font colour to contrast canvBg
+        canvas.create_text(event.x, event.y - 15, anchor = CENTER,
+                                    fill = 'white', font = self.text_font,
+                                            text = vhstr, tag = 'vhtext')
+
+    def mouse_leftup(self, event):
+        canvas.delete('vhtext')
 
     def colour_iterate(self):
         """ generator for colour options """
@@ -1131,33 +1172,47 @@ www.asliceofraspberrypi.co.uk\n\
             fname, fext = os.path.splitext(filename)
             if fext == '.pdf':
                 ftemp = tempfile.NamedTemporaryFile()
-                canvas.postscript(file = ftemp.name, colormode = 'color',
-                            pageheight = self.canvHt, pagewidth = self.canvWid)
+                canvas.postscript(file = ftemp.name, colormode = 'color')
                 ftemp.seek(0)
-                try:
-                    process = subprocess.Popen(["/usr/bin/ps2pdf",
-                                                ftemp.name, fname + '.pdf'])
-                except OSError:
-                    ftemp.close()
-                    messagebox.showerror('Conversion Error',
-                                        'please check "ps2pdf" is installed')
-                    self.b_action.config(state = NORMAL)
-                    self.b_sweep.config(state = NORMAL)
-                    self.b_reset.config(state = NORMAL)
-                    self.b_save.config(state = NORMAL)
-                    return
-                process.wait()
-                ftemp.close()
+                if self.reformat_ps(ftemp.name):
+                    ftemp.seek(0)
+                    try:
+                        process = subprocess.Popen(['/usr/bin/ps2pdf',
+                                                            ftemp.name, filename])
+                    except OSError:
+                        ftemp.close()
+                        messagebox.showerror('Conversion Error',
+                                            'please check "ps2pdf" is installed')
+                    else:
+                        process.wait()
+                        ftemp.close()
             elif fext == '.ps':
                 fn_ps = fname + '.ps'
                 canvas.postscript(file = fn_ps, colormode = 'color')
+                self.reformat_ps(fn_ps)
             else:
-                messagebox.showerror('Bad file extension', 'Please specify ".ps" or ".pdf"')
+                messagebox.showerror('Bad file extension',
+                                            'Please specify ".ps" or ".pdf"')
+
         self.b_action.config(state = NORMAL)
         self.b_sweep.config(state = NORMAL)
         self.b_reset.config(state = NORMAL)
         self.b_save.config(state = NORMAL)
 
+    def reformat_ps(self, fn_ps):
+        """ enlargen the postscript pixelsize """
+        pixelsize = self.text_font[1]
+        args = [ '/bin/sed', '-i']
+        args.extend([ '-e', 's/findfont ' + pixelsize + '/findfont 12/g'])
+        args.extend([fn_ps])
+        try:
+            process = subprocess.Popen(args)
+        except OSError:
+            messagebox.showerror('Undefined Error', 'an error ocurred')
+            return False
+        else:
+            process.wait()
+        return True
 
 # Assign TK to root
 root = Tk()
