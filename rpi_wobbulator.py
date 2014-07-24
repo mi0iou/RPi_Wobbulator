@@ -26,7 +26,7 @@
 # v2.6.6 Auto linear scale for ch 1, and optional lin/log for ch 2 - Tony
 # v2.7.0 ADC may now be set at 3.75SPS 18Bit, 15SPS 16Bit, 60SPS 14Bit or 240SPS 12Bit - Tom (tgh)
 # v2.7.1 scale of dBm scale changed. DBm option removed and dBm scale only shown when using Channel 2,
-#        Volt scale show for other channels. Bias option removed and bias compensation applied to 
+#        Volt scale show for other channels. Bias option removed and bias compensation applied to
 #        channel 2, no bias compensation applied to other channels. Code tidied up - Tom (tgh)
 
 # Please see "README.txt" for a description of this software
@@ -64,7 +64,7 @@ try:
     import cPickle as pickle
 except:
     import pickle
-    
+
 version = '2.7.1-X'
 
 params = {}
@@ -121,6 +121,7 @@ from tkinter import filedialog
 from Wobby.ADC import ADC as WobbyADC
 from Wobby.DDS import DDS as WobbyDDS
 
+
 # Class definition for WobbyPi application
 class WobbyPi():
 
@@ -165,9 +166,9 @@ class WobbyPi():
     # Build Graphical User Interface
     def __init__(self, master, params):
 
-        optiontkfonts = { 'TkCaptionFont', 'TkSmallCaptionFont', 'TkTooltipFont',
+        optiontkfonts = ['TkCaptionFont', 'TkSmallCaptionFont', 'TkTooltipFont',
                                 'TkFixedFont', 'TkHeadingFont', 'TkMenuFont',
-                                'TkIconFont', 'TkTextFont', 'TkDefaultFont' }
+                                'TkIconFont', 'TkTextFont', 'TkDefaultFont']
 
         for opt in optiontkfonts:
             root.tk.call('font', 'configure', opt, '-family', self.text_font[0],
@@ -175,8 +176,6 @@ class WobbyPi():
 
         frame = Frame(master, bd=10)
         frame.pack(fill=BOTH,expand=1)
-
-        self.chrtHt = 0
 
         # setup working parameters
         # system values
@@ -313,7 +312,7 @@ class WobbyPi():
             cb_memstore.select()
         if int(params['cc']) == 1:
             cb_colcyc.select()
-            
+
         # user description space
         fr_desc = Label(frame, text = 'Desc.')
         fr_desc.grid(row = 7, column = 0, columnspan = 1)
@@ -323,7 +322,7 @@ class WobbyPi():
         e_desc.grid(row = 7, column = 1, columnspan = 4)
         e_desc.bind('<Key-Return>', self.desc_change)
         e_desc.insert(0, 'Mouse-Left-Click exactly on the sweep trace')
-        self.desc_change(0)
+        self.desc_change(None)
 
         # frequency entries
         fr_freq = LabelFrame(frame, text = 'Frequency (Hz)', labelanchor = 'n')
@@ -374,8 +373,8 @@ class WobbyPi():
                                                     command = self.cycle_sweep)
         # Button to save data
         self.b_save = Button(fr_control, text = 'Save', height = 1, width = 3,
-                                    activeforeground = 'red', state = NORMAL,
-                                                        command = self.save_canvas)
+                                    activeforeground = 'red', state = DISABLED,
+                                                    command = self.save_canvas)
 
         self.b_reset.grid(row = 0, column = 0)
         self.b_sweep.grid(row = 0, column = 1)
@@ -390,7 +389,7 @@ class WobbyPi():
         ypos = self.mrgnTop / 2
         canvas.create_text(xpos, ypos, fill = self.canvFg, anchor = CENTER,
                                         text = self.desc.get(), tag = 'desc')
-        
+
     def freq_change(self, event):
         self.sweep_start_reqd = True
         """ Potentially - fill step field with suitable value ? """
@@ -407,12 +406,12 @@ class WobbyPi():
         win.config(menu = top)    # set its menu option
         m_file = Menu(top, tearoff = 0)
         top.add_cascade(label = 'File', menu = m_file, underline = 0)
-        m_file.add_command(label = 'Load', command = self.file_load, underline = 0,
-                                                        accelerator = 'Ctrl+L')
-        m_file.add_command(label = 'Save', command = self.file_save, underline = 0,
-                                                        accelerator = 'Ctrl+S')
-        m_file.add_command(label = 'Exit', command = root.destroy, underline = 1,
-                                                        accelerator = 'Ctrl+Q')
+        m_file.add_command(label = 'Load', command = self.file_load,
+                                        underline = 0, accelerator = 'Ctrl+L')
+        m_file.add_command(label = 'Save', command = self.file_save,
+                                        underline = 0, accelerator = 'Ctrl+S')
+        m_file.add_command(label = 'Exit', command = root.destroy,
+                                        underline = 1, accelerator = 'Ctrl+Q')
         opt = Menu(top, tearoff = 0)
         top.add_cascade(label = 'Options', menu = opt, underline = 0)
         opt.add_command(label = 'Background', command = self.getBackgroundColor,
@@ -431,10 +430,10 @@ class WobbyPi():
                                                                 underline = 0)
         help = Menu(top, tearoff = 0)
         top.add_cascade(label = 'Help', menu = help, underline = 0)
-        help.add_command(label = 'Controls', command = self.showHelp, underline = 0)
+        help.add_command(label = 'Controls', command = self.showHelp,
+                                                                underline = 0)
         help.add_command(label = 'About Wobbulator', command = self.showAbout,
                                                                 underline = 0)
-
 
     def not_done(self):
         messagebox.showerror('Not implemented', 'Not yet available')
@@ -564,14 +563,6 @@ www.asliceofraspberrypi.co.uk\n\
         """ Initialise variables, buffers, and state """
         self.memstore_reset()
 
-        self._emit_startfreq = 0 
-        self._emit_stopfreq = 0
-        self._emit_stepfreq = 0
-        self._emit_spanfreq = 0
-        self._emit_ipchan = 0 
-        self._emit_gain = 0
-        self._emit_colour = ''
-
         # Synchronise Hardware & GUI state\appearance
         self.ipchan_update()
         self.gain_update()
@@ -581,7 +572,7 @@ www.asliceofraspberrypi.co.uk\n\
         #self._colour_iterator = self.colour_iterate()
         self.colour_sync()
 
-        self.b_save.config(state = DISABLED)
+        self.sweep_start_reqd = True
 
         # FIXME: better to invoke self.reset() and strip
         # duplicated actions from this section
@@ -595,6 +586,7 @@ www.asliceofraspberrypi.co.uk\n\
         self.label_yscale()
         self.label_xscale()
         self.graticule_update()
+        self.desc_change(None)
         canvas.update_idletasks()
 
     # display graticule
@@ -684,19 +676,19 @@ www.asliceofraspberrypi.co.uk\n\
             # not reclaiming plot tags may leave unwanted trace
             # lose : lose
 
-    def fconv(self,f):	
+    def fconv(self,f):
         """
         convert frequency f to Hz and return as int value
         e.g.: 10 MHz, 14.1m, 1k, 3.67 Mhz, 1.2 khz
         """
         try:
-            f = f.upper()	
-            if f.find("K") > 0:	
-                    return (int(float(f[:f.find("K")]) * 1000))	
-            elif f.find("M") > 0:	
-                    return (int(float(f[:f.find("M")]) * 1000000))	
-            else:	
-                    return (int(float(f)))	
+            f = f.upper()
+            if f.find("K") > 0:
+                return (int(float(f[:f.find("K")]) * 1000))
+            elif f.find("M") > 0:
+                return (int(float(f[:f.find("M")]) * 1000000))
+            else:
+                return (int(float(f)))
         except ValueError:
             return 0
 
@@ -710,8 +702,8 @@ www.asliceofraspberrypi.co.uk\n\
 
     def label_xscale(self):
         """ reclaim and display x-axis labels """
-        startF = float(self.fconv(self.fstart.get()))	
-        stopF = float(self.fconv(self.fstop.get()))	
+        startF = float(self.fconv(self.fstart.get()))
+        stopF = float(self.fconv(self.fstop.get()))
         if stopF > 1000000:
             f0 = round(startF / 1000000.0, 6)
             fN = round(stopF / 1000000.0, 6)
@@ -733,17 +725,17 @@ www.asliceofraspberrypi.co.uk\n\
         while f0 < fN:
             stry = self.lblfmt(f0)
             canvas.create_text(xpos, ypos, fill = self.canvFg,
-                                                    text = stry, tag = 'hlabel')
+                                                text = stry, tag = 'hlabel')
             f0 = round(f0 + fStep, 6)
             xpos = xpos + (self.chrtWid / self.xDivs)
         stry = self.lblfmt(fN)
         canvas.create_text(xpos, ypos, fill = self.canvFg,
-                                                    text = stry, tag = 'hlabel')
+                                                text = stry, tag = 'hlabel')
         # display the horizontal axis label
         xpos = (((self.mrgnLeft + self.chrtWid + self.mrgnRight) - len(fDesc))
                                                                     / 2) + 26
         canvas.create_text(xpos, ypos + 15, fill = self.canvFg,
-                                                    text = fDesc, tag = 'hlabel')
+                                                text = fDesc, tag = 'hlabel')
         canvas.update_idletasks()
 
     # display vertical axis labels
@@ -788,22 +780,17 @@ www.asliceofraspberrypi.co.uk\n\
     def sweep_start(self):
         """ perform frequency sweep """
 
-        # Making changes via the GUI whilst running a sweep is now possible
-        # Changes made when cycling, before the sweep starts
-        # Start & Stop Frequency, Input Channel, Gain
-        # Changes made during a sweep
-        # Frequency Step, Bit Resolution, Trace Colour
-        # this list is not exhaustive, and all side-effects require handling
-
-        # FIXME: Handle changes made when cycling
-        startfreq = self.fconv(self.fstart.get())	 
-        stopfreq = self.fconv(self.fstop.get())	
+        # start\stop\stepfreq could be made 'enter key' bind dependant all
+        # setting 'sweep_start_reqd' when changed, simplifying code here.
+        # Do we wish to force 'Enter'ing on the User ?
+        startfreq = self.fconv(self.fstart.get())
+        stopfreq = self.fconv(self.fstop.get())
         stepfreq = self.fconv(self.fstep.get())
         ipchan = self._ipchan_option[self.ipchan.get()]
         gain = self._gain_option[self.gainval.get()]
         self._emit_colour = self._colour_cycle
 
-        #  If a critical value has changed
+        #  If a sweep dependant value has changed
         if (self.sweep_start_reqd or (self._emit_startfreq != startfreq) or
                                         (self._emit_stopfreq != stopfreq) or
                                             (self._emit_stepfreq != stepfreq)):
@@ -811,7 +798,7 @@ www.asliceofraspberrypi.co.uk\n\
                 self.invalid_sweep()
                 return
             self._emit_span = (stopfreq-startfreq)
-            self._emit_startfreq = startfreq 
+            self._emit_startfreq = startfreq
             self._emit_stopfreq = stopfreq
             self._emit_stepfreq = stepfreq
             self._emit_gain = gain
@@ -821,7 +808,6 @@ www.asliceofraspberrypi.co.uk\n\
             if self.record.get():
                 # save a trace sweep header
                 # Need to handle the case of multiple traces
-                # FIXME: some of the below may change during sweep
                 ddu = {'fstart' : startfreq, 'fstop' : stopfreq,
                                                         'fstep' : step}
                 self.buf_data.update(ddu)
@@ -829,11 +815,12 @@ www.asliceofraspberrypi.co.uk\n\
                 self.buf_data.update(ddu)
                 ddu = {'Gain' : gain}
                 self.buf_data.update(ddu)
+                ddu = {'colour' : colour}
+                self.buf_data.update(ddu)
 
+                # FIXME: some of the below may change during sweep
                 bitres = self._bitres_option[self.bitval.get()]
                 ddu = {'BPS' : bitres}
-                self.buf_data.update(ddu)
-                ddu = {'colour' : colour}
                 self.buf_data.update(ddu)
                 ddu = {'Desc' : self.desc}
                 self.buf_data.update(ddu)
@@ -860,11 +847,11 @@ www.asliceofraspberrypi.co.uk\n\
         # y2 = self.chrtHt/plotscale
         # y3 = self.chrtHt + self.mrgnTop
         # y = int(y3 - ((reading - plotbias) * y2))
-        # re-write
+        # re-express
         # y = int(y3 - ((reading * y2) - (plotbias * y2)))
         # y4 = (plotbias * y2)
         # y = int(y3 - ((reading * y2) - y4))
-        # re-write
+        # re-express
         # y = int((y3 + y4) - (reading * y2))
         # y1 = (y3 + y4)
         # simplified equivalence
@@ -874,13 +861,19 @@ www.asliceofraspberrypi.co.uk\n\
 
         """ simplify x-coordinate calulation for use inside the loop """
         # x = int((chrtWid * ((frequency - startfreq) / span)) + mrgnLeft)
+        # re-express
         # x = int((chrtWid * ((frequency / span) - (startfreq/ span))) + mrgnLeft)
+        # re-express
         # x = int(((chrtWid * (frequency / span)) - (chrtWid * (startfreq / span))) + mrgnLeft)
+        # re-express
         # x = int((chrtWid * (frequency / span)) - ((chrtWid * (startfreq / span)) - mrgnLeft))
+        # re-express
         # x2 = ((chrtWid * (startfreq / span)) - mrgnLeft)
         # x = int((chrtWid * (frequency / span)) - x2)
+        # re-express
         # x = int(((chrtWid / span) * frequency) - x2)
         # x1 = (chrtWid / span)
+        # simplified equivalence
         # x = int((x1 * frequency) - x2)
         self.x2 = ((self.chrtWid * (startfreq / self._emit_span))
                                                             - self.mrgnLeft)
@@ -903,9 +896,9 @@ www.asliceofraspberrypi.co.uk\n\
         # for y-coordinate start point
         self.ystart = self.y1 - (reading * self.y2)
         # Initialise the frequency generator
-        # Deliberately overstep stopfreq to compensate for any rounding
-        # side-effects that may create a shortfall.
-        # Handle the overstep in sweep_continue.
+        # If stepfreq is not a divisor of span then stopfreq
+        # will be exceeded by some proportion of stepfreq.
+        # Handle any overstep in sweep_continue.
         self._sweep_iterator = self.sweep_iterate(startfreq + stepfreq,
                                             stopfreq + stepfreq, stepfreq)
         self.sweep_continue()
@@ -921,7 +914,8 @@ www.asliceofraspberrypi.co.uk\n\
         try:
             frequency = next(self._sweep_iterator)
         except StopIteration:
-            # should never happen
+            # should never happen, prove it
+            assert False
             self.sweep_end()
         else:
             # correct any overstep
@@ -1017,7 +1011,6 @@ www.asliceofraspberrypi.co.uk\n\
             # schedule a fresh sweep
             self._callback_id = root.after(1, self.sweep_start)
 
-
     def sweep_iterate(self, start, finish, step):
         for freq in range(start, finish, step):
             yield freq
@@ -1049,7 +1042,7 @@ www.asliceofraspberrypi.co.uk\n\
         self.b_action.config(state = DISABLED)
         self.b_save.config(state = DISABLED)
         self.sweep_start()
-        
+
     def cycle_sweep(self):
         """ start cyclic sweeps """
         self.oneflag = False
@@ -1063,17 +1056,11 @@ www.asliceofraspberrypi.co.uk\n\
         """ reset everything """
         root.after_cancel(self._callback_id)
         self.dds.reset()
-        self._emit_startfreq = 0 
-        self._emit_stopfreq = 0
-        self._emit_stepfreq = 0
-        self._emit_spanfreq = 0
-        self._emit_gain = 0
-        self._emit_ipchan = 0
+        self.sweep_start_reqd = True
         self.clearscreen()
         self.record_valid = False
         self.buf_data.clear()
         self.memstore_reset()
-        self.oneflag = False
         self.b_action['text'] = 'Cycle'
         self.b_action['command'] = self.cycle_sweep
         self.b_sweep.config(state = NORMAL)
@@ -1089,7 +1076,7 @@ www.asliceofraspberrypi.co.uk\n\
         """ stop and reset the runtime variables """
         root.after_cancel(self._callback_id)
         self.dds.reset()
-        self.oneflag = False
+        #self.oneflag = False
         self.b_action['text'] = 'Cycle'
         self.b_action['command'] = self.cycle_sweep
         self.b_sweep.config(state = NORMAL)
@@ -1160,7 +1147,7 @@ www.asliceofraspberrypi.co.uk\n\
         """
         self.memstore_valid = False
         self.line_buffer.clear()
- 
+
     # FIXME: not enough try's
     def save_canvas(self):
         self.b_action.config(state = DISABLED)
@@ -1178,14 +1165,16 @@ www.asliceofraspberrypi.co.uk\n\
                     ftemp.seek(0)
                     try:
                         process = subprocess.Popen(['/usr/bin/ps2pdf',
-                                                            ftemp.name, filename])
+                                                        ftemp.name, filename])
                     except OSError:
                         ftemp.close()
                         messagebox.showerror('Conversion Error',
-                                            'please check "ps2pdf" is installed')
+                                        'please check "ps2pdf" is installed')
                     else:
                         process.wait()
                         ftemp.close()
+                else:
+                    ftemp.close()
             elif fext == '.ps':
                 fn_ps = fname + '.ps'
                 canvas.postscript(file = fn_ps, colormode = 'color')
@@ -1200,7 +1189,14 @@ www.asliceofraspberrypi.co.uk\n\
         self.b_save.config(state = NORMAL)
 
     def reformat_ps(self, fn_ps):
-        """ enlargen the postscript pixelsize """
+        """
+        enlargen the postscript pixelsize
+
+        The canvas.postscript documentation related to the definition
+        of fonts is vague at best. Until fonts can be controlled by
+        the correct method, live with whatever font type ghostscript
+        chooses to use, but change the font size to make it readable.
+        """
         pixelsize = self.text_font[1]
         args = [ '/bin/sed', '-i']
         args.extend([ '-e', 's/findfont ' + pixelsize + '/findfont 12/g'])
