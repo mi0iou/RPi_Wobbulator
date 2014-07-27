@@ -29,11 +29,10 @@ These Methods interface to the following device hardware:
     with I2C Interface and On-Board Reference.
 """
 
-# import GPIO module
-import RPi.GPIO as GPIO
-
 #import quick2wire i2c module
 import quick2wire.i2c as i2c
+
+from Wobby.lock import Lock as WobbyLock
 
 _PROGRAM_ERROR_MESSAGE = 'A Program Error has occurred, please report this bug'
 
@@ -42,8 +41,8 @@ class ADC:
     # Serial Number
     _sernum = 20140701
 
-    # Version 0 Revision 2
-    _vernum = 0.3
+    # Version 0 Revision 4
+    _vernum = 0.4
 
     # FIXME: report supported hardware
     """
@@ -129,9 +128,8 @@ class ADC:
         print("RPiWobbulator ADC API Library Module Version " + 
                                                         str(self._vernum))
 
-        # prepare GPIO
-        GPIO.setmode(GPIO.BOARD)
-        GPIO.setwarnings(False)
+        # obtain lock for ADC
+        self._lock = WobbyLock('ADC')
 
         # prepare i2c bus
         self._bus = i2c.I2CMaster()
@@ -313,7 +311,7 @@ class ADC:
 
     def raw_write(self, adc_data):
         """
-        Method to directly write a byte to the ADC.
+        Directly write a byte into the ADC register.
 
         Return: nothing
 
@@ -325,7 +323,7 @@ class ADC:
 
     def raw_read(self, reads):
         """
-        Method to directly read byte(s) from the ADC.
+        Directly read byte(s) from the ADC register.
 
         Argument: number of bytes to read
         Return: byte(s) read
@@ -337,7 +335,7 @@ class ADC:
 
     def read(self):
         """
-        Method to take a single reading from the ADC.
+        Take a single reading from the ADC.
 
         Return: float value
 
@@ -376,16 +374,23 @@ class ADC:
             if (self._adc_bitres == 12):
                 return (t/1000)
 
-    # remove prefix underscore (and this comment) when complete
+    # remove prefix underscore (and this comment) when complete,
+    # should also provide a callback method.
     def _read_next(self):
         """
-        Method to take the next reading from the ADC when programmed in
+        Collect the next reading from the ADC when programmed in
         continuous conversion mode.
         """
         if _adc_contconv:
             pass 
         else:
             raise Exception('ADC not in continuous conversion mode.')
+
+    def exit(self):
+        """
+        Shut down the hardware and free all resources.
+        """
+        self.lock.release()
 
 def main():
     """

@@ -32,6 +32,8 @@ These Methods interface to the following device hardware:
 # import GPIO module
 import RPi.GPIO as GPIO
 
+from Wobby.lock import Lock as WobbyLock
+
 # Define GPIO pins
 
 # DDS Word Load Clock
@@ -51,8 +53,8 @@ class DDS:
     # Serial Number
     _sernum = 20140707
 
-    # Version 0 Revision 2
-    _vernum = 0.2
+    # Version 0 Revision 3
+    _vernum = 0.3
 
     # FIXME: specify supported hardware
     # EIModule ADS9850 Signal Generator Module http://www.eimodule.com
@@ -62,6 +64,9 @@ class DDS:
 
         print("RPiWobbulator DDS API Library Module Version " +
                                                         str(self._vernum))
+
+        # obtain lock for DDS
+        self._lock = WobbyLock('DDS')
 
         # setup GPIO
         GPIO.setmode(GPIO.BOARD)
@@ -121,10 +126,17 @@ class DDS:
 
     def reset(self):
         """
-        Reset the AD9850 DDS registers (disables the output frequency)
+        Reset the AD9850 DDS registers (disables the output waveform)
         """
         self._pulse_high(_DDS_RESET)
         return
+
+    def exit(self):
+        """
+        Shut down the hardware and free all resources.
+        """
+        self._pulse_high(_DDS_RESET)
+        self._lock.release()
 
 def main():
     """

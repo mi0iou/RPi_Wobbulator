@@ -101,4 +101,5 @@ root.wm_title('RPi SignalGen v1.0')
 app = RPiSignalGen(root)
 # Wait for GUI input
 root.mainloop()
+app.dds.exit()
 

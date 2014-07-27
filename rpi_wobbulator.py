@@ -410,7 +410,7 @@ class WobbyPi():
                                         underline = 0, accelerator = 'Ctrl+L')
         m_file.add_command(label = 'Save', command = self.file_save,
                                         underline = 0, accelerator = 'Ctrl+S')
-        m_file.add_command(label = 'Exit', command = root.destroy,
+        m_file.add_command(label = 'Exit', command = self.exit,
                                         underline = 1, accelerator = 'Ctrl+Q')
         opt = Menu(top, tearoff = 0)
         top.add_cascade(label = 'Options', menu = opt, underline = 0)
@@ -561,22 +561,16 @@ www.asliceofraspberrypi.co.uk\n\
 
     def initialise(self):
         """ Initialise variables, buffers, and state """
-        self.memstore_reset()
-
         # Synchronise Hardware & GUI state\appearance
         self.ipchan_update()
         self.gain_update()
         self.bitres_update()
         self.clearscreen()
-
-        #self._colour_iterator = self.colour_iterate()
+        self.memstore_reset()
         self.colour_sync()
-
         self.sweep_start_reqd = True
-
-        # FIXME: better to invoke self.reset() and strip
-        # duplicated actions from this section
-        print("Initialised")
+        # FIXME: better to invoke self.reset() and
+        # strip duplicated actions from this section ?
 
     # clear the screen
     def clearscreen(self):
@@ -1210,6 +1204,18 @@ www.asliceofraspberrypi.co.uk\n\
             process.wait()
         return True
 
+    def exit(self):
+        """ tidy up and exit """
+        #FIXME: this needs refinement re RPi.GPIO library
+        # should RPi.GPIO be handled here by WobbyPi or in
+        # the ADC & DDS libraries as it is now ?
+        # if dds.exit() shuts down RPi.GPIO it is no longer
+        # available to adc.exit().
+        self.dds.exit()
+        self.adc.exit()
+        root.destroy()
+        
+        
 # Assign TK to root
 root = Tk()
 # Set main window title and menubar

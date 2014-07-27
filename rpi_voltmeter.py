@@ -112,4 +112,4 @@ app = RPiVoltMeter(root)
 
 # Start main loop and wait for input from GUI
 root.mainloop()
-
+app.adc.exit()
