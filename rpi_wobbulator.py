@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # vim:ai:sw=4:ts=8:et:fileencoding=ascii
 #
-# RPi Wobbulator v2.7.1-X
+# Based on RPi Wobbulator v2.7.1
 #
 # Copyright (C) 2013-2014 Tom Herbison MI0IOU
 # Email tom@asliceofraspberrypi.co.uk
@@ -65,7 +65,7 @@ try:
 except:
     import pickle
 
-version = '2.7.1-X'
+version = '2.7.1-Y'
 
 params = {}
 
@@ -460,7 +460,7 @@ class WobbyPi():
 
     def showAbout(self):
         aboutmsg = "\
-   RPi Wobbulator v2.7.1-X\n\
+   RPi Wobbulator " + version + "\n\
 \n\
    Copyright (C) 2013-2014\n\
      Tom Herbison MI0IOU\n\
@@ -1219,7 +1219,7 @@ www.asliceofraspberrypi.co.uk\n\
 # Assign TK to root
 root = Tk()
 # Set main window title and menubar
-root.wm_title('RPi Wobbulator v2.7.1-X')
+root.wm_title('RPi Wobbulator ' + version)
 # Create instance of class WobbyPi
 app = WobbyPi(root, params)
 app.makemenu(root)
