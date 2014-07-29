@@ -85,6 +85,7 @@ def default_parameters():
     params['vchan'] = 1
     params['colour'] = 'red'
     params['ms'] = 0
+    params['as'] = 0
     params['rec'] = 0
     params['cc'] = 0
     params['cls'] = 0
@@ -291,6 +292,12 @@ class WobbyPi():
                                                 variable = self.memstore,
                                                 command = self.memstore_update)
 
+        # enable\disable auto-step
+        self.autostep = IntVar()
+        cb_autostep = Checkbutton(fr_cb, text = 'AS', onvalue = 1, offvalue = 0,
+                                                variable = self.autostep,
+                                                command = self.autostep_update)
+
         # enable\disable colour cycling of trace
         cb_colcyc = Checkbutton(fr_cb, text = 'CC', onvalue = 1, offvalue = 0,
                                                    variable = self.colcyc,
@@ -300,7 +307,8 @@ class WobbyPi():
         cb_clear.grid(row = 1, column = 0, sticky = 'w')
         cb_record.grid(row = 2, column = 0, sticky = 'w')
         cb_memstore.grid(row = 3, column = 0, sticky = 'w')
-        cb_colcyc.grid(row = 4, column = 0, sticky = 'w')
+        cb_autostep.grid(row = 4, column = 0, sticky = 'w')
+        cb_colcyc.grid(row = 5, column = 0, sticky = 'w')
 
         if int(params['grid']) == 1:
             cb_graticule.select()
@@ -310,6 +318,8 @@ class WobbyPi():
             cb_record.select()
         if int(params['ms']) == 1:
             cb_memstore.select()
+        if int(params['as']) == 1:
+            cb_autostep.select()
         if int(params['cc']) == 1:
             cb_colcyc.select()
 
@@ -350,10 +360,10 @@ class WobbyPi():
         fr_stepf = Label(fr_freq, text = ' Step:')
         fr_stepf.grid(row = 0, column = 4)
         self.fstep = StringVar()
-        e_stepf = Entry(fr_freq, textvariable=self.fstep, width = 8)
-        e_stepf.grid(row = 0, column = 5)
-        e_stepf.insert(0, self.fIntvl)
-        e_stepf.bind('<Key-Return>', self.freq_change)
+        self.e_stepf = Entry(fr_freq, textvariable=self.fstep, width = 8)
+        self.e_stepf.grid(row = 0, column = 5)
+        self.e_stepf.insert(0, self.fIntvl)
+        self.e_stepf.bind('<Key-Return>', self.freq_change)
 
         # control panel frame
         fr_control = LabelFrame(frame, text = 'Control', labelanchor = 'n')
@@ -391,14 +401,17 @@ class WobbyPi():
                                         text = self.desc.get(), tag = 'desc')
 
     def freq_change(self, event):
+        """ Flag a restart is required """
         self.sweep_start_reqd = True
-        """ Potentially - fill step field with suitable value ? """
+        """ Fill step field with suitable value """
         start = self.fconv(self.fstart.get())
         stop = self.fconv(self.fstop.get())
         span = stop - start
-        step = int(span / self.chrtWid)
         # one pixel per step
-        print('Suggested Step:{} chrtWid:{}'.format(step, self.chrtWid))
+        step = int(span / self.chrtWid)
+        if self.autostep.get():
+            self.e_stepf.delete(0,END)
+            self.e_stepf.insert(0, step)
 
     def makemenu(self, win):
         global root
@@ -454,6 +467,7 @@ class WobbyPi():
 [Cls] - Clear display at sweep start\n\
 [Rec] - Record sweeps for saving\n\
 [MS]  - Memory Store display\n\
+[AS]  - Auto-Step completion\n\
 [CC]  - Colour Cycle after sweep\n\
 "
         messagebox.showinfo('Help', helpmsg)
@@ -669,6 +683,9 @@ www.asliceofraspberrypi.co.uk\n\
             # reclaiming plot tags may remove wanted trace
             # not reclaiming plot tags may leave unwanted trace
             # lose : lose
+
+    def autostep_update(self):
+        pass
 
     def fconv(self,f):
         """
@@ -1243,6 +1260,7 @@ params['vgain'] = str(app._gain_option[app.gainval.get()])
 params['vchan'] = str(app._ipchan_option[app.ipchan.get()])
 params['colour'] = app.colour.get()
 params['cc'] = str(app.colcyc.get())
+params['as'] = str(app.autostep.get())
 params['ms'] = str(app.memstore.get())
 params['rec'] = str(app.record.get())
 params['cls'] = str(app.cls.get())
