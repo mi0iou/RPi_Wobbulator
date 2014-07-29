@@ -12,13 +12,13 @@ RPi_Wobbulator
 ~~~~~~~~~~~~~~
 WIP: Implement file sweep record\playback
 
-Include 'Description' in image
 Format Help & About messagebox text
-Be consistent about 'Version', derive every occurrance from the same definition
 
 Consider:
 Trace removal could be more fine-grained by using trace colour as the tag
 
+DONE: Include 'Description' in image
+DONE: Be consistent about 'Version', derive every occurrance from the same definition
 DONE: Border vertical & horizontal scale labels when no graticule is displayed
 DONE: Only re-draw the affected vertical or horizontal scale, not both
 
