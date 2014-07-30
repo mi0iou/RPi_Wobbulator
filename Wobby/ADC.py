@@ -390,7 +390,7 @@ class ADC:
         """
         Shut down the hardware and free all resources.
         """
-        self.lock.release()
+        self._lock.release()
 
 def main():
     """
