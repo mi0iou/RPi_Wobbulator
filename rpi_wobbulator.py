@@ -534,24 +534,28 @@ www.asliceofraspberrypi.co.uk\n\
                 'Only WTF file format is supported\nPlease specify ".wtf" file suffix')
 
     def file_save(self):
-        ttl = 'Save Wobbulator Trace File'
-        ft = (("Wobbulator Trace Files", "*.wtf"),("All files", "*.*"))
-        filename = filedialog.asksaveasfilename(defaultextension='.wtf',
-                                                    title=ttl, filetypes=ft)
-        if filename:
-            fname, fext = os.path.splitext(filename)
-            if fext.upper() == '.WTF':
-                # wobbulator trace file
-                with open(filename, 'wb') as dataFile:
-                    try:
-                        pickle.dump(self.trace_header, dataFile)
-                        pickle.dump(self.trace_list, dataFile)
-                    except pickle.PicklingError:
-                        messagebox.showerror('File Error', 'File is corrupt!')
-                        return
-            else:
-                messagebox.showerror('Bad file extension',
-                'Only WTF file format is supported\nPlease specify ".wtf" file suffix')
+        if self.trace_list_valid == True:
+            ttl = 'Save Wobbulator Trace File'
+            ft = (("Wobbulator Trace Files", "*.wtf"),("All files", "*.*"))
+            filename = filedialog.asksaveasfilename(defaultextension='.wtf',
+                                                        title=ttl, filetypes=ft)
+            if filename:
+                fname, fext = os.path.splitext(filename)
+                if fext.upper() == '.WTF':
+                    # wobbulator trace file
+                    with open(filename, 'wb') as dataFile:
+                        try:
+                            pickle.dump(self.trace_header, dataFile)
+                            pickle.dump(self.trace_list, dataFile)
+                        except pickle.PicklingError:
+                            messagebox.showerror('File Error', 'File is corrupt!')
+                            return
+                else:
+                    messagebox.showerror('Bad file extension',
+                    'Only WTF file format is supported\nPlease specify ".wtf" file suffix')
+        else:
+            messagebox.showerror('No recorded data',
+                    'Record data before attempting save')
 
     def file_export(self):
         # could disable file_export instead...
