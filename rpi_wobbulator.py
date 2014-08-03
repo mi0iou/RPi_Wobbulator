@@ -123,15 +123,10 @@ from tkinter import filedialog
 from tkinter import simpledialog
 # ---- end of menu support ----
 
-from Wobby.ADC import ADC as WobbyADC
-from Wobby.DDS import DDS as WobbyDDS
-
 
 # Class definition for WobbyPi application
 class WobbyPi():
 
-    adc = WobbyADC()
-    dds = WobbyDDS()
 
     trace_data = {}
     trace_header = {}
@@ -160,6 +155,12 @@ class WobbyPi():
 
     # Build Graphical User Interface
     def __init__(self, master, params):
+
+        if _has_wobbulator:
+            from Wobby.ADC import ADC as WobbyADC
+            self.adc = WobbyADC()
+            from Wobby.DDS import DDS as WobbyDDS
+            self.dds = WobbyDDS()
 
         optiontkfonts = ['TkCaptionFont', 'TkSmallCaptionFont', 'TkTooltipFont',
                                 'TkFixedFont', 'TkHeadingFont', 'TkMenuFont',
@@ -211,6 +212,8 @@ class WobbyPi():
             rb.grid(row = key, sticky = 'w')
             if int(params['vchan']) == key + 1:
                 rb.select()
+            if not _has_wobbulator:
+                rb.configure(state='disabled')
 
         # Input gain
         fr_gain = LabelFrame(frame, text = 'Gain', labelanchor = 'n')
@@ -225,6 +228,8 @@ class WobbyPi():
             rb.grid(row = key, sticky = 'w')
             if int(params['vgain']) == gain:
                 rb.select()
+            if not _has_wobbulator:
+                rb.configure(state='disabled')
 
         # Bit resolution 18Bit, 16Bit, 14Bit, 12Bit
         fr_bitres = LabelFrame(frame, text = 'BPS', labelanchor = 'n')
@@ -239,6 +244,8 @@ class WobbyPi():
             rb.grid(row = key, sticky = 'w')
             if int(params['bits']) == bitres:
                 rb.select()
+            if not _has_wobbulator:
+                rb.configure(state='disabled')
 
         # Colour of trace
         fr_colour = LabelFrame(frame, text = 'Colour', labelanchor = 'n')
@@ -384,6 +391,22 @@ class WobbyPi():
         self.b_sweep.grid(row = 0, column = 1)
         self.b_action.grid(row = 0, column = 2)
         self.b_save.grid(row = 0, column = 3)
+
+        if not _has_wobbulator:
+            self.b_save.configure(state='disabled')
+            self.b_action.configure(state='disabled')
+            self.b_sweep.configure(state='disabled')
+            self.b_reset.configure(state='disabled')
+            self.e_stepf.configure(state='disabled')
+            e_stopf.configure(state='disabled')
+            e_startf.configure(state='disabled')
+            #cb_colcyc.configure(state='disabled')
+            cb_autostep.configure(state='disabled')
+            #cb_memstore.configure(state='disabled')
+            #cb_record.configure(state='disabled')
+            #cb_clear.configure(state='disabled')
+            #cb_graticule.configure(state='disabled')
+
         canvas.update_idletasks()
 
     def makemenu(self, win):
@@ -585,9 +608,15 @@ www.asliceofraspberrypi.co.uk\n\
     def initialise(self):
         """ Initialise variables, buffers, and state """
         # Synchronise Hardware & GUI state\appearance
-        self.ipchan_update()
-        self.gain_update()
-        self.bitres_update()
+        if _has_wobbulator:
+            self.ipchan_update()
+            self.gain_update()
+            self.bitres_update()
+        else:
+            self.b_action.config(state = DISABLED)
+            self.b_sweep.config(state = DISABLED)
+            self.b_reset.config(state = DISABLED)
+            self.b_save.config(state = DISABLED)
         self.fresh_canvas()
         self.colour_sync()
         self.sweep_start_reqd = True
@@ -1014,9 +1043,10 @@ www.asliceofraspberrypi.co.uk\n\
             # on the last trace iterator set the 'oneflag' and populate
             # trace_stop with the following except code
         except StopIteration:
+            if _has_wobbulator:
+                self.b_action.config(state = NORMAL)
+                self.b_sweep.config(state = NORMAL)
             self.b_reset.config(state = NORMAL)
-            self.b_action.config(state = NORMAL)
-            self.b_sweep.config(state = NORMAL)
             self.b_save.config(state = NORMAL)
             return
         else:
@@ -1322,8 +1352,9 @@ www.asliceofraspberrypi.co.uk\n\
         self.fresh_canvas()
         self.trace_list_reset()
         self.memstore_reset()
-        self.b_sweep.config(state = NORMAL)
-        self.b_action.config(state = NORMAL)
+        if _has_wobbulator:
+            self.b_sweep.config(state = NORMAL)
+            self.b_action.config(state = NORMAL)
         self.b_save.config(state = DISABLED)
 
     def history_invalidated(self):
@@ -1453,8 +1484,9 @@ www.asliceofraspberrypi.co.uk\n\
                 messagebox.showerror('Bad file extension',
                                             'Please specify ".ps" or ".pdf"')
 
-        self.b_action.config(state = NORMAL)
-        self.b_sweep.config(state = NORMAL)
+        if _has_wobbulator:
+            self.b_action.config(state = NORMAL)
+            self.b_sweep.config(state = NORMAL)
         self.b_reset.config(state = NORMAL)
         self.b_save.config(state = NORMAL)
 
@@ -1482,15 +1514,23 @@ www.asliceofraspberrypi.co.uk\n\
 
     def exit(self):
         """ tidy up and exit """
-        #FIXME: this needs refinement re RPi.GPIO library
-        # should RPi.GPIO be handled here by WobbyPi or in
-        # the ADC & DDS libraries as it is now ?
-        # if dds.exit() shuts down RPi.GPIO it is no longer
-        # available to adc.exit().
-        self.dds.exit()
-        self.adc.exit()
+        if _has_wobbulator:
+            self.dds.exit()
+            self.adc.exit()
         root.destroy()
 
+
+# Check for presence of RPi Wobbulator on i2c bus
+_has_wobbulator = False
+try:
+    i2c_op = str(subprocess.check_output(('i2cdetect', '-y', '1')))
+except FileNotFoundError:
+    print("i2cdetect not found, assuming RPi Wobbulator not present")
+except:
+    pass
+else:
+    if i2c_op.find('68') != -1:
+        _has_wobbulator = True
 
 # Assign TK to root
 root = Tk()
