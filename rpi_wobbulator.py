@@ -205,12 +205,12 @@ class WobbyPi():
 
         self.ipchan = IntVar()
         for key, ipchan in self._ipchan_option.items():
-            txt = str(key + 1)
+            txt = str(ipchan)
             rb = Radiobutton(fr_ipchan, text = txt, value = key,
                                                 variable = self.ipchan,
                                                 command = self.ipchan_update)
             rb.grid(row = key, sticky = 'w')
-            if int(params['vchan']) == key + 1:
+            if int(params['vchan']) == ipchan:
                 rb.select()
             if not _has_wobbulator:
                 rb.configure(state='disabled')
@@ -251,7 +251,6 @@ class WobbyPi():
         fr_colour = LabelFrame(frame, text = 'Colour', labelanchor = 'n')
         fr_colour.grid(row = 3, column = 6)
 
-        # FIXME use value = key
         self.colour = StringVar()
         # rb.invoke() below is dependant on self.colcyc
         self.colcyc = IntVar()
@@ -260,8 +259,7 @@ class WobbyPi():
             rb = Radiobutton(fr_colour, fg = colour, text = txt, value = colour,
                                                 variable = self.colour,
                                                 command = self.colour_update)
-            rb.grid(row = key + 1, sticky = 'w')
-            key_rb = [key, rb]
+            rb.grid(row = key, sticky = 'w')
             self._colour_button[key] = rb
             if params['colour'] == colour:
                 rb.invoke()
@@ -368,7 +366,7 @@ class WobbyPi():
 
         # control panel frame
         fr_control = LabelFrame(frame, text = 'Control', labelanchor = 'n')
-        fr_control.grid(row = 8, column = 4, columnspan = 2)
+        fr_control.grid(row = 8, column = 4, columnspan = 3)
 
         # Button to reset settings
         self.b_reset = Button(fr_control, text = 'Reset', height = 1, width = 3,
@@ -382,6 +380,11 @@ class WobbyPi():
         self.b_action = Button(fr_control, text = 'Cycle', height = 1, width = 3,
                                                     activeforeground = 'red',
                                                     command = self.cycle_sweep)
+        # Button to undo
+        self.b_undo = Button(fr_control, text = 'Undo', height = 1, width = 3,
+                                    activeforeground = 'red', state = DISABLED,
+                                                    command = self.undo_canvas)
+
         # Button to save image
         self.b_save = Button(fr_control, text = 'Save', height = 1, width = 3,
                                     activeforeground = 'red', state = DISABLED,
@@ -390,10 +393,12 @@ class WobbyPi():
         self.b_reset.grid(row = 0, column = 0)
         self.b_sweep.grid(row = 0, column = 1)
         self.b_action.grid(row = 0, column = 2)
-        self.b_save.grid(row = 0, column = 3)
+        self.b_undo.grid(row = 0, column = 3)
+        self.b_save.grid(row = 0, column = 4)
 
         if not _has_wobbulator:
-            self.b_save.configure(state='disabled')
+            #self.b_undo.configure(state='disabled')
+            #self.b_save.configure(state='disabled')
             self.b_action.configure(state='disabled')
             self.b_sweep.configure(state='disabled')
             self.b_reset.configure(state='disabled')
@@ -413,7 +418,7 @@ class WobbyPi():
         global root
         top = Menu(win)
         win.config(menu = top)    # set its menu option
-        m_file = Menu(top, tearoff = 0)
+        self.m_file = m_file = Menu(top, tearoff = 0)
         top.add_cascade(label = 'File', menu = m_file, underline = 0)
         m_file.add_command(label = 'Load', command = self.file_load,
                                         underline = 0, accelerator = 'Ctrl+L')
@@ -445,6 +450,9 @@ class WobbyPi():
                                                                 underline = 0)
         help.add_command(label = 'About Wobbulator', command = self.showAbout,
                                                                 underline = 0)
+        # FIXME: implement me
+        #m_file.entryconfig(1, state=DISABLED)
+        #m_file.entryconfig(2, state=DISABLED)
 
     def not_done(self):
         messagebox.showerror('Not implemented', 'Not yet available')
@@ -559,7 +567,7 @@ www.asliceofraspberrypi.co.uk\n\
                 'Only WTF file format is supported\nPlease specify ".wtf" file suffix')
 
     def file_save(self):
-        if self.trace_list_valid == True:
+        if len(self.trace_list):
             ttl = 'Save Wobbulator Trace File'
             ft = (("Wobbulator Trace Files", "*.wtf"),("All files", "*.*"))
             filename = filedialog.asksaveasfilename(defaultextension='.wtf',
@@ -584,7 +592,7 @@ www.asliceofraspberrypi.co.uk\n\
 
     def file_export(self):
         # could disable file_export instead...
-        if self.trace_list_valid == True:
+        if len(self.trace_list):
             ttl = 'Export Wobbulator Trace File'
             ft = (("Comma Seperated Values", "*.csv"),("All files", "*.*"))
             filename = filedialog.asksaveasfilename(defaultextension='.csv',
@@ -715,7 +723,7 @@ www.asliceofraspberrypi.co.uk\n\
 
     def memstore_update(self):
         """ memory store state change """
-        if not self.memstore.get() and self.memstore_valid == True:
+        if not self.memstore.get():
             self.memstore_reset()
             canvas.delete("plot")
             # reclaiming plot tags may remove wanted trace
@@ -755,10 +763,21 @@ www.asliceofraspberrypi.co.uk\n\
         """ Flag a restart is required """
         self.sweep_start_reqd = True
 
-    def param_to_key(self, options, param):
+    def undo_canvas(self):
+        self.b_undo.config(state = DISABLED)
+        for key, lineID in self.line_buffer.items():
+            canvas.delete(lineID)
+        canvas.update_idletasks()
+        if self._imm_record:
+            del self.trace_list[len(self.trace_list)-1]
+        if not len(self.trace_list):
+            # FIXME: better than nothing
+            self.b_save.config(state = DISABLED)
+
+    def param_to_key(self, dictionary, value):
         """ lookup dictionary key using a dictionary value """
-        for key, val in options.items():
-            if val == param:
+        for key, val in dictionary.items():
+            if val == value:
                 return key
         return None
 
@@ -961,6 +980,7 @@ www.asliceofraspberrypi.co.uk\n\
 
         self.b_action.config(state = DISABLED)
         self.b_sweep.config(state = DISABLED)
+        self.b_undo.config(state = DISABLED)
         self.b_save.config(state = DISABLED)
 
         # synchronise wobbulator state to trace header
@@ -981,6 +1001,8 @@ www.asliceofraspberrypi.co.uk\n\
             return
 
         self._imm_spanfreq = (self._imm_stopfreq - self._imm_startfreq)
+
+        self._imm_record = self.record.get()
 
         self.fstart.set(self._imm_startfreq)
         self.fstop.set(self._imm_stopfreq)
@@ -1017,7 +1039,7 @@ www.asliceofraspberrypi.co.uk\n\
         self.fresh_canvas()
 
         self.trace_list_reset()
-        if self.record.get():
+        if self._imm_record:
             self.trace_save_header()
 
         self.simplify_x()
@@ -1047,6 +1069,7 @@ www.asliceofraspberrypi.co.uk\n\
                 self.b_action.config(state = NORMAL)
                 self.b_sweep.config(state = NORMAL)
             self.b_reset.config(state = NORMAL)
+            self.b_undo.config(state = NORMAL)
             self.b_save.config(state = NORMAL)
             return
         else:
@@ -1059,7 +1082,7 @@ www.asliceofraspberrypi.co.uk\n\
             # graticule offset for x-coordinate start point
             self.xstart = self.mrgnLeft
 
-            if self.record.get():
+            if self._imm_record:
                 self.trace_data.update({startfreq : self.save_adapt(self.reading)})
                 #self.trace_data.update({startfreq : self.reading})
 
@@ -1116,10 +1139,11 @@ www.asliceofraspberrypi.co.uk\n\
             self._imm_stepfreq = stepfreq
             self._imm_ipchan = ipchan
             self._imm_gain = gain
+            self._imm_record = self.record.get()
             self.fresh_canvas()
             self.trace_list_reset()
             self.sweep_start_reqd = False
-            if self.record.get():
+            if self._imm_record:
                 self.trace_save_header()
         elif self.cls.get():
             self.fresh_canvas()
@@ -1148,7 +1172,7 @@ www.asliceofraspberrypi.co.uk\n\
         # Handle any overstep in the frequency generator
         self._sweep_iterator = self.sweep_iterate(startfreq + stepfreq,
                                             stopfreq + stepfreq, stepfreq)
-        if self.record.get():
+        if self._imm_record:
             self.trace_data.update({startfreq : self.save_adapt(self.reading)})
             #self.trace_data.update({startfreq : self.reading})
         self.sweep_start_func = self.sweep_start
@@ -1178,7 +1202,6 @@ www.asliceofraspberrypi.co.uk\n\
                 assert False
                 self.sweep_end()
             else:
-                #if not self.memstore.get() and self.memstore_valid:
                 if not self.memstore.get():
                     # memory store disabled
                     if frequency in self.line_buffer:
@@ -1191,7 +1214,7 @@ www.asliceofraspberrypi.co.uk\n\
 
                 # optionally record trace sweep data for later saving to file
                 # FIXME: should this be immutable during a sweep ?
-                if self.record.get():
+                if self._imm_record:
                     self.trace_data.update({frequency : self.save_adapt(self.reading)})
                     #self.trace_data.update({frequency : self.reading})
 
@@ -1234,17 +1257,13 @@ www.asliceofraspberrypi.co.uk\n\
     def sweep_end(self):
         # completed a full sweep
 
-        if not (self.memstore.get() or self.cls.get()):
-            # memort store disabled, flag for trace erasure
-            self.memstore_valid = True
+        self.b_undo.config(state = NORMAL)
 
         if self.colcyc.get():
             # cycle to next colour
             self.colour_next()
 
-        if self.record.get():
-            # completed pass with record enabled
-            self.trace_list_valid = True
+        if self._imm_record:
             # Save data as a list of 'plot sets'
             self.trace_list.append(deepcopy(self.trace_data))
 
@@ -1312,6 +1331,7 @@ www.asliceofraspberrypi.co.uk\n\
         self.b_sweep['command'] = self.reset_sweep
         self.b_action.config(state = DISABLED)
 
+        self.b_undo.config(state = DISABLED)
         self.b_save.config(state = DISABLED)
         self.b_reset['command'] = self.reset_sweep
         self.b_reset.config(state = NORMAL)
@@ -1324,6 +1344,7 @@ www.asliceofraspberrypi.co.uk\n\
         self.b_action['command'] = self.cycle_stop
         self.b_sweep.config(state = DISABLED)
 
+        self.b_undo.config(state = DISABLED)
         self.b_save.config(state = DISABLED)
         self.b_reset['command'] = self.reset_sweep
         self.b_reset.config(state = NORMAL)
@@ -1343,6 +1364,7 @@ www.asliceofraspberrypi.co.uk\n\
         self.b_sweep['text'] = 'Sweep'
         self.b_sweep['command'] = self.single_sweep
         self.b_action.config(state = NORMAL)
+        self.b_undo.config(state = DISABLED)
         self.b_save.config(state = DISABLED)
 
     def reset_trace(self):
@@ -1355,6 +1377,7 @@ www.asliceofraspberrypi.co.uk\n\
         if _has_wobbulator:
             self.b_sweep.config(state = NORMAL)
             self.b_action.config(state = NORMAL)
+        self.b_undo.config(state = DISABLED)
         self.b_save.config(state = DISABLED)
 
     def history_invalidated(self):
@@ -1438,8 +1461,8 @@ www.asliceofraspberrypi.co.uk\n\
         Any references to previous trace sweep data is erased.
         NOTE: the trace plot is not removed from the canvas.
         """
-        self.memstore_valid = False
         self.line_buffer.clear()
+        self.b_undo.config(state = DISABLED)
 
     def trace_list_reset(self):
         """
@@ -1448,13 +1471,13 @@ www.asliceofraspberrypi.co.uk\n\
         self.trace_data.clear()
         self.trace_header.clear()
         self.trace_list[:] = []
-        self.trace_list_valid = False
 
     # FIXME: not enough try's
     def save_canvas(self):
         self.b_action.config(state = DISABLED)
         self.b_sweep.config(state = DISABLED)
         self.b_reset.config(state = DISABLED)
+        self.b_undo.config(state = DISABLED)
         self.b_save.config(state = DISABLED)
         filename = filedialog.asksaveasfilename()
         if filename:
@@ -1474,6 +1497,7 @@ www.asliceofraspberrypi.co.uk\n\
                                         'please check "ps2pdf" is installed')
                     else:
                         process.wait()
+                    finally:
                         ftemp.close()
                 else:
                     ftemp.close()
@@ -1488,6 +1512,7 @@ www.asliceofraspberrypi.co.uk\n\
             self.b_action.config(state = NORMAL)
             self.b_sweep.config(state = NORMAL)
         self.b_reset.config(state = NORMAL)
+        self.b_undo.config(state = NORMAL)
         self.b_save.config(state = NORMAL)
 
     def reformat_ps(self, fn_ps):
