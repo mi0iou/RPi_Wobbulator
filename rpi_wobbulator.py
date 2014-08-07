@@ -71,7 +71,7 @@ version = '2.7.1-Y'
 params = {}
 
 def default_parameters():
-    print('Loading default parameters')
+    print('Loading default settings')
     params['version'] = version
     params['chrtHt'] = 500
     params['chrtWid'] = 500
@@ -80,8 +80,8 @@ def default_parameters():
     params['canvFg'] = 'black'
     params['canvBg'] = '#008484'
     params['fBegin'] = 0
-    params['fEnd'] = 35000000
-    params['fIntvl'] = 70000
+    params['fEnd'] = 30000000
+    params['fIntvl'] = 60000
     params['vgain'] = 1
     params['vchan'] = 1
     params['colour'] = 'red'
@@ -133,7 +133,7 @@ class WobbyPi():
     trace_list = []
     line_buffer = {}
 
-    # postscript will change the font family but keep the pixelsize
+    # ghostscript will change the font family but keep the pixelsize
     text_font = ('clean','8')
 
     #options_option = {0:[IntVar, 'Gr', 1, 0, self.grid, self.graticule_update],
@@ -152,6 +152,14 @@ class WobbyPi():
     _sweep_iterator = ()
 
     _callback_id = 0
+
+    _imm_startfreq = 0
+    _imm_stopfreq = 0
+    _imm_stepfreq = 0
+    _imm_ipchan = 0
+    _imm_gain = 0
+    _imm_colour = 0
+    _imm_bitres = 0
 
     # Build Graphical User Interface
     def __init__(self, master, params):
@@ -206,7 +214,7 @@ class WobbyPi():
         self.ipchan = IntVar()
         for key, ipchan in self._ipchan_option.items():
             txt = str(ipchan)
-            rb = Radiobutton(fr_ipchan, text = txt, value = key,
+            rb = Radiobutton(fr_ipchan, text = txt, value = ipchan,
                                                 variable = self.ipchan,
                                                 command = self.ipchan_update)
             rb.grid(row = key, sticky = 'w')
@@ -222,7 +230,7 @@ class WobbyPi():
         self.gainval = IntVar()
         for key, gain in self._gain_option.items():
             txt = 'x ' + str(gain)
-            rb = Radiobutton(fr_gain, text = txt, value = key,
+            rb = Radiobutton(fr_gain, text = txt, value = gain,
                                                 variable = self.gainval,
                                                 command = self.gain_update)
             rb.grid(row = key, sticky = 'w')
@@ -235,11 +243,11 @@ class WobbyPi():
         fr_bitres = LabelFrame(frame, text = 'BPS', labelanchor = 'n')
         fr_bitres.grid(row = 2, column = 6)
 
-        self.bitval = IntVar()
+        self.bitres = IntVar()
         for key, bitres in self._bitres_option.items():
             txt = str(bitres)
-            rb = Radiobutton(fr_bitres, text = txt, value = key,
-                                                variable = self.bitval,
+            rb = Radiobutton(fr_bitres, text = txt, value = bitres,
+                                                variable = self.bitres,
                                                 command = self.bitres_update)
             rb.grid(row = key, sticky = 'w')
             if int(params['bits']) == bitres:
@@ -429,7 +437,7 @@ class WobbyPi():
         m_file.add_command(label = 'Exit', command = self.exit,
                                         underline = 1, accelerator = 'Ctrl+Q')
         opt = Menu(top, tearoff = 0)
-        top.add_cascade(label = 'Options', menu = opt, underline = 0)
+        top.add_cascade(label = 'Settings', menu = opt, underline = 0)
         opt.add_command(label = 'Background', command = self.getBackgroundColor,
                                                                 underline = 0)
         opt.add_command(label = 'Foreground', command = self.getForegroundColor,
@@ -444,6 +452,10 @@ class WobbyPi():
                                                                 underline = 0)
         opt.add_command(label = 'Y-divisions', command = self.getYdivisions,
                                                                 underline = 0)
+        opt.add_separator()
+        opt.add_command(label = 'Save settings', command = self.save_params,
+                                                                underline = 0)
+
         help = Menu(top, tearoff = 0)
         top.add_cascade(label = 'Help', menu = help, underline = 0)
         help.add_command(label = 'Controls', command = self.showHelp,
@@ -539,6 +551,35 @@ www.asliceofraspberrypi.co.uk\n\
         if yDivs != 'None':
             params['yDivs'] = yDivs
             self.yDivs = yDivs
+
+    def save_params(self):
+        global params
+        params['version'] = version
+        params['chrtHt'] = self.chrtHt
+        params['chrtWid'] = self.chrtWid
+        params['xDivs'] = self.xDivs
+        params['yDivs'] = self.yDivs
+        params['canvFg'] = self.canvFg
+        params['canvBg'] = self.canvBg
+        params['fBegin'] = str(self.fstart.get())
+        params['fEnd'] = str(self.fstop.get())
+        params['fIntvl'] = str(self.fstep.get())
+        params['vgain'] = str(self.gainval.get())
+        params['vchan'] = str(self.ipchan.get())
+        params['colour'] = self.colour.get()
+        params['cc'] = str(self.colcyc.get())
+        params['as'] = str(self.autostep.get())
+        params['ms'] = str(self.memstore.get())
+        params['rec'] = str(self.record.get())
+        params['cls'] = str(self.cls.get())
+        params['grid'] = str(self.graticule.get())
+        params['bits'] = str(self.bitres.get())
+
+        with open(paramFN, "wb") as paramFile:
+            try:
+                pickle.dump(params, paramFile)
+            except pickle.PicklingError:
+                messagebox.showerror('File Error', 'An error occurred')
 
     def file_load(self):
         ttl = 'Load Wobbulator Trace File'
@@ -694,23 +735,37 @@ www.asliceofraspberrypi.co.uk\n\
                                     y, fill = self.canvFg, tag = 'graticule')
         canvas.update_idletasks()
 
+    def reflect_state(self):
+        if (self._imm_startfreq == self.fconv(self.fstart.get()) and
+                        self._imm_stopfreq == self.fconv(self.fstop.get()) and
+                        self._imm_stepfreq == self.fconv(self.fstep.get()) and
+                                    self._imm_gain == self.gainval.get() and
+                                    (self._imm_ipchan == self.ipchan.get() or
+                            self._imm_ipchan != 2 and self.ipchan.get() != 2)):
+            self.sweep_start_reqd = False
+            if len(self.line_buffer):
+                self.b_save.config(state = NORMAL)
+        else:
+            self.b_save.config(state = DISABLED)
+            self.sweep_start_reqd = True
+
     def ipchan_update(self):
         """ input channel change, effect and adjust y-scale labels """
-        ipchan = self._ipchan_option[self.ipchan.get()]
+        ipchan = self.ipchan.get()
         self.adc.set_ipchan(ipchan)
         self.label_yscale()
-        self.sweep_start_reqd = True
+        self.reflect_state()
 
     def gain_update(self):
         """ gain change, effect and adjust y-scale labels """
-        gain = self._gain_option[self.gainval.get()]
+        gain = self.gainval.get()
         self.adc.set_gain(gain)
         self.label_yscale()
-        self.sweep_start_reqd = True
+        self.reflect_state()
 
     def bitres_update(self):
         """ bit resolution change, effect """
-        bitres = self._bitres_option[self.bitval.get()]
+        bitres = self.bitres.get()
         self.adc.set_bitres(bitres)
 
     def colour_update(self):
@@ -746,8 +801,6 @@ www.asliceofraspberrypi.co.uk\n\
         self.trace_header.update({'Desc' : self.desc.get()})
 
     def freq_update(self, event):
-        """ Flag a restart is required """
-        self.sweep_start_reqd = True
         self.label_xscale()
         if self.autostep.get():
             """ Fill step field with suitable value """
@@ -758,21 +811,29 @@ www.asliceofraspberrypi.co.uk\n\
             step = int(span / self.chrtWid)
             self.e_stepf.delete(0,END)
             self.e_stepf.insert(0, step)
+        self.reflect_state()
 
     def step_update(self, event):
-        """ Flag a restart is required """
-        self.sweep_start_reqd = True
+        self.reflect_state()
 
     def undo_canvas(self):
         self.b_undo.config(state = DISABLED)
+
         for key, lineID in self.line_buffer.items():
             canvas.delete(lineID)
+        self.line_buffer.clear()
         canvas.update_idletasks()
+
         if self._imm_record:
             del self.trace_list[len(self.trace_list)-1]
         if not len(self.trace_list):
             # FIXME: better than nothing
             self.b_save.config(state = DISABLED)
+
+        if self.colcyc.get():
+            while self._colour_cycle != self._imm_colour:
+                self.colour_next()
+
 
     def param_to_key(self, dictionary, value):
         """ lookup dictionary key using a dictionary value """
@@ -845,8 +906,8 @@ www.asliceofraspberrypi.co.uk\n\
 
     def label_yscale(self):
         """ reclaim and display y-axis labels """
-        gain = self._gain_option[self.gainval.get()]
-        ipchan = self._ipchan_option[self.ipchan.get()]
+        gain = self.gainval.get()
+        ipchan = self.ipchan.get()
         if ipchan == 2:
             # Channel 2 (log) is selected
             startV = float(-75)
@@ -906,7 +967,7 @@ www.asliceofraspberrypi.co.uk\n\
 
     def simplify_y(self):
         """ simplify y-coordinate calulation """
-        # y = int(self.chrtHt + self.mrgnTopr
+        # y = int(self.chrtHt + self.mrgnTop
         #             - ((reading - plotbias) * self.chrtHt/plotscale))
         # y2 = self.chrtHt/plotscale
         # y3 = self.chrtHt + self.mrgnTop
@@ -954,20 +1015,17 @@ www.asliceofraspberrypi.co.uk\n\
         self.trace_header.update({'Gain' : self._imm_gain})
         self.trace_header.update({'bias' : self.plotbias})
         self.trace_header.update({'scale' : self.plotscale})
-
-        # FIXME: some of the below may change during sweep
         self.trace_header.update({'colour' : self._imm_colour})
-        bitres = self._bitres_option[self.bitval.get()]
-        self.trace_header.update({'BitRes' : bitres})
+        self.trace_header.update({'BitRes' : self._imm_bitres})
+
         self.trace_header.update({'Desc' : self.desc.get()})
 
     def compensate(self):
         # compensate for errors in first readings related to a
         # significant frequency jump and low bit resolution by
         # throwing away a quantity inversely proportional to
-        # the bit resolution key value i.e. 0:18, 1:16, 2:14, 3:12
-        _magic = (self.bitval.get() + 2) ** 2
-        # 18>4 16>9 14>16 12>25
+        # the bit resolution value i.e. 18, 16, 14, 12
+        _magic = abs(self.bitres.get() - 19) ** 2
         for n in range(_magic):
             # discard voltage reading
             self.adc.read()
@@ -990,7 +1048,7 @@ www.asliceofraspberrypi.co.uk\n\
             self._imm_stepfreq = trace_header['fstep']
             self._imm_ipchan = trace_header['Input']
             self._imm_gain = trace_header['Gain']
-            bitres = trace_header['BitRes']
+            self._imm_bitres = trace_header['BitRes']
             colour = trace_header['colour']
             description = trace_header['Desc']
             self.plotbias = trace_header['bias']
@@ -1007,27 +1065,9 @@ www.asliceofraspberrypi.co.uk\n\
         self.fstart.set(self._imm_startfreq)
         self.fstop.set(self._imm_stopfreq)
         self.fstep.set(self._imm_stepfreq)
-
-        for key, val in self._ipchan_option.items():
-             if val == self._imm_ipchan:
-                  self.ipchan.set(key)
-                  break
-
-        for key, val in self._gain_option.items():
-            if val == self._imm_gain:
-                self.gainval.set(key)
-                break
-
-        for key, val in self._bitres_option.items():
-            if val == bitres:
-                self.bitval.set(key)
-                break
-
-        """
-        key = self.param_to_key(self._bitres_option, trace_header['BitRes'])
-        if key:
-            self.bitval.set(key)
-        """
+        self.ipchan.set(self._imm_ipchan)
+        self.gainval.set(self._imm_gain)
+        self.bitres.set(self._imm_bitres)
 
         self.colour.set(colour)
         self.colour_sync()
@@ -1103,8 +1143,9 @@ www.asliceofraspberrypi.co.uk\n\
         stopfreq = self.fconv(self.fstop.get())
         stepfreq = self.fconv(self.fstep.get())
 
-        ipchan = self._ipchan_option[self.ipchan.get()]
-        gain = self._gain_option[self.gainval.get()]
+        ipchan = self.ipchan.get()
+        gain = self.gainval.get()
+        bitres = self.bitres.get()
 
         self._imm_colour = self._colour_cycle
 
@@ -1130,7 +1171,7 @@ www.asliceofraspberrypi.co.uk\n\
                                         (self._imm_stopfreq != stopfreq) or
                                             (self._imm_stepfreq != stepfreq)):
             if (startfreq > stopfreq) or (stepfreq < 1):
-                self.invalid_sweep('The frequency selection options are invalid')
+                self.invalid_sweep('The frequency selection settings are invalid')
                 return
             # immutable variables, may not change during a sweep
             self._imm_spanfreq = (stopfreq-startfreq)
@@ -1139,6 +1180,7 @@ www.asliceofraspberrypi.co.uk\n\
             self._imm_stepfreq = stepfreq
             self._imm_ipchan = ipchan
             self._imm_gain = gain
+            self._imm_bitres = bitres
             self._imm_record = self.record.get()
             self.fresh_canvas()
             self.trace_list_reset()
@@ -1187,7 +1229,7 @@ www.asliceofraspberrypi.co.uk\n\
         as the higher the bit resolution the longer it takes to sample.
         """
 
-        _magic = (self.bitval.get() + 1) ** 2
+        _magic = abs(self._imm_bitres - 17) ** 2
         _do_over = 1
         while _do_over:
             if self.sweep_start_reqd:
@@ -1567,29 +1609,4 @@ app.makemenu(root)
 app.initialise()
 # Start main loop and wait for input from GUI
 root.mainloop()
-
-# When program stops, save user parameters
-paramFile = open(paramFN, "wb")
-params['version'] = version
-params['chrtHt'] = app.chrtHt
-params['chrtWid'] = app.chrtWid
-params['xDivs'] = app.xDivs
-params['yDivs'] = app.yDivs
-params['canvFg'] = app.canvFg
-params['canvBg'] = app.canvBg
-params['fBegin'] = str(app.fstart.get())
-params['fEnd'] = str(app.fstop.get())
-params['fIntvl'] = str(app.fstep.get())
-params['vgain'] = str(app._gain_option[app.gainval.get()])
-params['vchan'] = str(app._ipchan_option[app.ipchan.get()])
-params['colour'] = app.colour.get()
-params['cc'] = str(app.colcyc.get())
-params['as'] = str(app.autostep.get())
-params['ms'] = str(app.memstore.get())
-params['rec'] = str(app.record.get())
-params['cls'] = str(app.cls.get())
-params['grid'] = str(app.graticule.get())
-params['bits'] = str(app._bitres_option[app.bitval.get()])
-params = pickle.dump(params, paramFile)
-paramFile.close()
 

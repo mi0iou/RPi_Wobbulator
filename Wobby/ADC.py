@@ -355,7 +355,7 @@ class ADC:
             # check if positive or negative number and invert if needed
             if (h > 128):
                 t = ~(0x020000 - t)
-            return (t/64000)
+            return (t/64000.0)
         else:
             m, l ,s = self._bus.transaction(i2c.reading(
                                                     self._adc_address, 3))[0]
@@ -368,11 +368,11 @@ class ADC:
             if (m > 128):
                 t = ~(0x02000 - t)
             if (self._adc_bitres == 16):
-                return (t/16000)
+                return (t/16000.0)
             if (self._adc_bitres == 14):
-                return (t/4000)
+                return (t/4000.0)
             if (self._adc_bitres == 12):
-                return (t/1000)
+                return (t/1000.0)
 
     # remove prefix underscore (and this comment) when complete,
     # should also provide a callback method.
