@@ -227,11 +227,11 @@ class WobbyPi():
         fr_gain = LabelFrame(frame, text = 'Gain', labelanchor = 'n')
         fr_gain.grid(row = 1, column = 6)
 
-        self.gainval = IntVar()
+        self.gain = IntVar()
         for key, gain in self._gain_option.items():
             txt = 'x ' + str(gain)
             rb = Radiobutton(fr_gain, text = txt, value = gain,
-                                                variable = self.gainval,
+                                                variable = self.gain,
                                                 command = self.gain_update)
             rb.grid(row = key, sticky = 'w')
             if int(params['vgain']) == gain:
@@ -564,7 +564,7 @@ www.asliceofraspberrypi.co.uk\n\
         params['fBegin'] = str(self.fstart.get())
         params['fEnd'] = str(self.fstop.get())
         params['fIntvl'] = str(self.fstep.get())
-        params['vgain'] = str(self.gainval.get())
+        params['vgain'] = str(self.gain.get())
         params['vchan'] = str(self.ipchan.get())
         params['colour'] = self.colour.get()
         params['cc'] = str(self.colcyc.get())
@@ -739,7 +739,7 @@ www.asliceofraspberrypi.co.uk\n\
         if (self._imm_startfreq == self.fconv(self.fstart.get()) and
                         self._imm_stopfreq == self.fconv(self.fstop.get()) and
                         self._imm_stepfreq == self.fconv(self.fstep.get()) and
-                                    self._imm_gain == self.gainval.get() and
+                                    self._imm_gain == self.gain.get() and
                                     (self._imm_ipchan == self.ipchan.get() or
                             self._imm_ipchan != 2 and self.ipchan.get() != 2)):
             self.sweep_start_reqd = False
@@ -758,7 +758,7 @@ www.asliceofraspberrypi.co.uk\n\
 
     def gain_update(self):
         """ gain change, effect and adjust y-scale labels """
-        gain = self.gainval.get()
+        gain = self.gain.get()
         self.adc.set_gain(gain)
         self.label_yscale()
         self.reflect_state()
@@ -906,13 +906,13 @@ www.asliceofraspberrypi.co.uk\n\
 
     def label_yscale(self):
         """ reclaim and display y-axis labels """
-        gain = self.gainval.get()
+        gain = self.gain.get()
         ipchan = self.ipchan.get()
         if ipchan == 2:
             # Channel 2 (log) is selected
             startV = float(-75)
             stopV = float(-25)
-            vN = startV + 50 / gain
+            vN = startV + (50 / gain)
             vDesc = 'dBm'
         else:
             # Assume linear scale
@@ -990,7 +990,7 @@ www.asliceofraspberrypi.co.uk\n\
 
         The voltage reading value is converted into it's
         'real' value for storage and export.
-        Keep syncronised with partner function 'load_adapt'.
+        Keep synchronised with partner function 'load_adapt'.
         """
         # How do we want to handle input channel two (dBm)
         return (reading / self._imm_gain)
@@ -1001,7 +1001,7 @@ www.asliceofraspberrypi.co.uk\n\
 
         The voltage reading value is converted into it's
         'internal' representation for trace plotting.
-        Keep syncronised with partner function 'save_adapt'.
+        Keep synchronised with partner function 'save_adapt'.
         """
         return (reading * self._imm_gain)
 
@@ -1066,7 +1066,7 @@ www.asliceofraspberrypi.co.uk\n\
         self.fstop.set(self._imm_stopfreq)
         self.fstep.set(self._imm_stepfreq)
         self.ipchan.set(self._imm_ipchan)
-        self.gainval.set(self._imm_gain)
+        self.gain.set(self._imm_gain)
         self.bitres.set(self._imm_bitres)
 
         self.colour.set(colour)
@@ -1103,7 +1103,7 @@ www.asliceofraspberrypi.co.uk\n\
             trace = next(self._list_iterator)
             # FIXME: rather than run into the StopIteration exception,
             # on the last trace iterator set the 'oneflag' and populate
-            # trace_stop with the following except code
+            # trace_stop with the code following the except
         except StopIteration:
             if _has_wobbulator:
                 self.b_action.config(state = NORMAL)
@@ -1144,7 +1144,7 @@ www.asliceofraspberrypi.co.uk\n\
         stepfreq = self.fconv(self.fstep.get())
 
         ipchan = self.ipchan.get()
-        gain = self.gainval.get()
+        gain = self.gain.get()
         bitres = self.bitres.get()
 
         self._imm_colour = self._colour_cycle
@@ -1216,7 +1216,6 @@ www.asliceofraspberrypi.co.uk\n\
                                             stopfreq + stepfreq, stepfreq)
         if self._imm_record:
             self.trace_data.update({startfreq : self.save_adapt(self.reading)})
-            #self.trace_data.update({startfreq : self.reading})
         self.sweep_start_func = self.sweep_start
         self.sweep_stop_func = self.single_stop
         self.sweep_continue()
@@ -1228,7 +1227,6 @@ www.asliceofraspberrypi.co.uk\n\
         The number of plots is inversely proportional to the bit resolution
         as the higher the bit resolution the longer it takes to sample.
         """
-
         _magic = abs(self._imm_bitres - 17) ** 2
         _do_over = 1
         while _do_over:
@@ -1255,10 +1253,8 @@ www.asliceofraspberrypi.co.uk\n\
                             raise ProgramError('Program error')
 
                 # optionally record trace sweep data for later saving to file
-                # FIXME: should this be immutable during a sweep ?
                 if self._imm_record:
                     self.trace_data.update({frequency : self.save_adapt(self.reading)})
-                    #self.trace_data.update({frequency : self.reading})
 
                 # calculate x co-ordinate from the reading
                 xend = int((self.x1 * frequency) - self.x2)
@@ -1486,7 +1482,7 @@ www.asliceofraspberrypi.co.uk\n\
         return key
 
     def colour_sync(self):
-        """ Syncronise the colour cycle to the User selected colour. """
+        """ Synchronise the colour cycle to the User selected colour. """
         while self._colour_cycle != self.colour.get():
             self.colour_cycle()
 

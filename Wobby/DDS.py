@@ -48,6 +48,8 @@ _DDS_RESET = 22
 # DDS crystal oscillator frequency in HZ (assumes 125MHz xtal)
 _DDS_XTAL_CLK = 125000000
 
+_DDS_K_FACTOR = (4294967296/_DDS_XTAL_CLK)
+
 class DDS:
 
     # Serial Number
@@ -116,7 +118,7 @@ class DDS:
         """
         self._pulse_high(_DDS_W_CLK)
         self._pulse_high(_DDS_FQ_UD)
-        freq=int(freq*4294967296/_DDS_XTAL_CLK)
+        freq=int(freq*_DDS_K_FACTOR)
         for b in range (0,4):
             self._writeb(freq & 0xFF)
             freq=freq>>8
@@ -124,9 +126,21 @@ class DDS:
         self._pulse_high(_DDS_FQ_UD)
         return
 
+    def powerdown(self):
+        """
+        Power down the AD9850.
+        """
+        self._pulse_high(_DDS_W_CLK)
+        self._pulse_high(_DDS_FQ_UD)
+        for b in range (0,4):
+            self._writeb(0)
+        self._writeb(0x04)
+        self._pulse_high(_DDS_FQ_UD)
+        return
+
     def reset(self):
         """
-        Reset the AD9850 DDS registers (disables the output waveform)
+        Reset the AD9850 DDS registers (disables the output waveform).
         """
         self._pulse_high(_DDS_RESET)
         return
@@ -135,8 +149,10 @@ class DDS:
         """
         Shut down the hardware and free all resources.
         """
-        self._pulse_high(_DDS_RESET)
+        self.reset()
+        self.powerdown()
         self._lock.release()
+        return
 
 def main():
     """
