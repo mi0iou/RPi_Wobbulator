@@ -654,6 +654,10 @@ www.asliceofraspberrypi.co.uk\n\
             messagebox.showerror('No recorded data',
                     'Record data before attempting export')
 
+    def exit(self):
+        """ exit, tidy up after GUI destruction """
+        root.destroy()
+
     def initialise(self):
         """ Initialise variables, buffers, and state """
         # Synchronise Hardware & GUI state\appearance
@@ -1023,12 +1027,19 @@ www.asliceofraspberrypi.co.uk\n\
     def compensate(self):
         # compensate for errors in first readings related to a
         # significant frequency jump and low bit resolution by
-        # throwing away a quantity inversely proportional to
-        # the bit resolution value i.e. 18, 16, 14, 12
-        _magic = abs(self.bitres.get() - 19) ** 2
-        for n in range(_magic):
-            # discard voltage reading
-            self.adc.read()
+        # throwing away until value read repeats.
+        v = self.adc.read()
+        u = self.adc.read()
+        # limit the maximum number of loops
+        for n in range(25):
+            w = self.adc.read()
+            if v == u and u == w:
+                # three consecutive identical readings
+                break
+            v = u
+            u = w
+            #print("{} ".format(v), end="")
+        #print("{}:{}".format(n, v))
 
     def trace_init(self, trace_header, trace_list):
         """ perform trace sweep from memory """
@@ -1575,14 +1586,6 @@ www.asliceofraspberrypi.co.uk\n\
             process.wait()
         return True
 
-    def exit(self):
-        """ tidy up and exit """
-        if _has_wobbulator:
-            self.dds.exit()
-            self.adc.exit()
-        root.destroy()
-
-
 # Check for presence of RPi Wobbulator on i2c bus
 _has_wobbulator = False
 try:
@@ -1606,3 +1609,7 @@ app.initialise()
 # Start main loop and wait for input from GUI
 root.mainloop()
 
+if _has_wobbulator:
+    print("Cleaning up")
+    app.dds.exit()
+    app.adc.exit()
