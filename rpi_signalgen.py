@@ -90,7 +90,7 @@ class RPiSignalGen():
         freq = self._fconv(self.freq.get())
         self.l_freq.config(fg='red', text=str(freq)+' Hz')
         self.dds.reset()
-        self.dds.set_frequency(freq)
+        self.dds.set_wave(freq)
 
 
 # Assign TK to root

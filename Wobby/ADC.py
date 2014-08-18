@@ -41,8 +41,8 @@ class ADC:
     # Serial Number
     _sernum = 20140701
 
-    # Version 0 Revision 4
-    _vernum = 0.4
+    # Version 0 Revision 5
+    _vernum = 0.5
 
     # FIXME: report supported hardware
     """
@@ -64,10 +64,10 @@ class ADC:
 
 
     # Bit Resolution\Samples Per Second Bits 2-3
-    # 12 bits : 240 SPS
-    # 14 bits : 60 SPS
-    # 16 bits : 15 SPS
-    # 18 bits : 3.75 SPS
+    # 12 bits : 240 SPS  : 4.16 nS
+    # 14 bits : 60 SPS   : 16.66 nS
+    # 16 bits : 15 SPS   : 66.66 nS
+    # 18 bits : 3.75 SPS : 266.66 nS
 
     """
     # FIXME: use me or loose me
@@ -77,6 +77,7 @@ class ADC:
     _ADC_BITRES_18 = 12
     """
     _mapbitres = { 12:0, 14:4, 16:8, 18:12, }
+    _mapbitreswait = { 12:1, 14:12, 16:55, 18:237, }
 
     """
     # FIXME: use me or loose me
@@ -86,6 +87,7 @@ class ADC:
     _ADC_SPS_3_75 = 12
     """
     _mapsps = { 240:0, 60:4, 15:8, 3.75:12, }
+    _mapspswait = { 240:1, 60:12, 15:55, 3.75:237, }
 
     # Continuous Conversion Bit 4 
     _ADC_CC = 16
@@ -122,11 +124,21 @@ class ADC:
 
     _adc_config = 0 + 12 + 0 + 0 + 128
 
-    def __init__(self):
+    _adc_delay = 235
+
+    _callback = ()
+
+    _callback_id = None
+
+    _master = None
+
+    def __init__(self, master = None):
         """Prepare to perform hardware access."""
 
         print("RPiWobbulator ADC API Library Module Version " + 
                                                         str(self._vernum))
+
+        self._master = master
 
         # obtain lock for ADC
         self._lock = WobbyLock('ADC')
@@ -179,7 +191,7 @@ class ADC:
         if self._adc_gain != gain:
             if gain not in self._mapgain.keys():
                 raise ValueError('Invalid argument:{} not in {}'.format(
-                                                    gain,self._mapgain.keys()))
+                                                gain, self._mapgain.keys()))
             self._adc_gain = gain
             self._config_update()
         return
@@ -193,11 +205,12 @@ class ADC:
 
         This is an alternative to specifying the 'Samples per Second'.
         """
-        if (self._adc_sps != 0) or (self._adc_bitres != bitres):
+        if self._adc_bitres != bitres:
             if bitres not in self._mapbitres.keys():
                 raise ValueError('Invalid argument:{} not in {}'.format(
-                                                bitres,self._mapbitres.keys()))
+                                            bitres, self._mapbitres.keys()))
             self._adc_bitres = bitres
+            self._adc_delay = self._mapbitreswait[self._adc_bitres]
             self._adc_sps = 0
             self._config_update()
         return
@@ -211,11 +224,12 @@ class ADC:
 
         This is an alternative to specifying the 'Bit Resolution'.
         """
-        if (self._adc_bitres != 0 or self._adc_sps != sps):
+        if self._adc_sps != sps:
             if sps not in self._mapsps.keys():
                 raise ValueError('Invalid argument:{} not in {}'.format(
-                                                    sps,self._mapsps.keys()))
+                                                    sps, self._mapsps.keys()))
             self._adc_sps = sps
+            self._adc_delay = self._mapspswait[self._adc_sps]
             self._adc_bitres = 0
             self._config_update()
         return
@@ -249,7 +263,7 @@ class ADC:
         if self._adc_ipchan != ipchan:
             if ipchan not in self._mapipchan.keys():
                 raise ValueError('Invalid argument:{} not in {}'.format(
-                                            ipchan,self._mapipchan.keys()))
+                                            ipchan, self._mapipchan.keys()))
             self._adc_ipchan = ipchan
             self._config_update()
         return
@@ -288,6 +302,7 @@ class ADC:
         for key, val in self._mapbitres.items():
             if val == bitres:
                 self._adc_bitres = key
+                self._adc_delay = self._mapbitreswait[self._adc_bitres]
                 break
 
         # continuous conversion flag bit 4
@@ -333,7 +348,7 @@ class ADC:
         """
         return self._bus.transaction(i2c.reading(self._adc_address, reads))[0]
 
-    def read(self):
+    def _read(self):
         """
         Take a single reading from the ADC.
 
@@ -374,6 +389,143 @@ class ADC:
             if (self._adc_bitres == 12):
                 return (t/1000.0)
 
+    def _read_bytes4(self):
+        """
+        Read 4 bytes (18 Bit resolution conversion and status byte)
+        Return: integer value
+        """
+        h, m, l ,s = self._bus.transaction(i2c.reading(
+                                                self._adc_address, 4))[0]
+        while (s & 128):
+            h, m, l, s  = self._bus.transaction(i2c.reading(
+                                                self._adc_address, 4))[0]
+        # shift bits to produce result
+        v = ((h & 0b00000001) << 16) | (m << 8) | l
+        # check if positive or negative number and invert if needed
+        if (h > 128):
+            v = ~(0x020000 - v)
+        return v
+
+    def _read_bytes3(self):
+        """
+        Read 3 bytes (16, 14, 12 Bit resolution conversion and status byte)
+        Return: integer value
+        """
+        m, l ,s = self._bus.transaction(i2c.reading(
+                                                self._adc_address, 3))[0]
+        while (s & 128):
+            m, l, s  = self._bus.transaction(i2c.reading(
+                                                self._adc_address, 3))[0]
+        # shift bits to produce result
+        v = (m << 8) | l
+        # check if positive or negative number and invert if needed
+        if (m > 128):
+            v = ~(0x02000 - v)
+        return v
+
+    def _read_18(self):
+        """
+        Convert 18 Bit resolution conversion to volts
+        Return: float value
+        """
+        v = (self._read_bytes4()/64000)
+        if self._callback:
+            self._callback(v)
+        self._callback_id = None
+        return v
+
+    def _read_16(self):
+        """
+        Convert 16 Bit resolution conversion to volts
+        Return: float value
+        """
+        v = (self._read_bytes3()/16000)
+        if self._callback:
+            self._callback(v)
+        self._callback_id = None
+        return v
+
+    def _read_14(self):
+        """
+        Convert 14 Bit resolution conversion to volts
+        Return: float value
+        """
+        v = (self._read_bytes3()/4000)
+        if self._callback:
+            self._callback(v)
+        self._callback_id = None
+        return v
+
+    def _read_12(self):
+        """
+        Convert 12 Bit resolution conversion to volts
+        Return: float value
+        """
+        v = (self._read_bytes3()/1000)
+        if self._callback:
+            self._callback(v)
+        self._callback_id = None
+        return v
+
+    def read_callback_cancel(self):
+        if self._callback_id != None:
+            if self._callback_id != -1:
+                self._master.after_cancel(self._callback_id)
+            self._callback_id = None
+
+    def read(self, callback = None):
+        """
+        Initiate a single reading from the ADC.
+
+        Passed nothing:
+        Return: float value
+        Writes the pre-defined configuration byte to the ADC and then blocks
+        until the ADC has completed one conversion which is then read,
+        converted to volts and returned.
+
+        Passed handler function:
+        Return:  nothing
+        Writes the pre-defined configuration byte to the ADC and then arranges
+        for callback after an appropriate delay and returns. After the delay
+        expires the callback occurs, one conversion is read, converted to volts
+        and passed to the specified handler function.
+        """
+        if self._callback_id == None:
+            # immediately flag as 'busy'
+            self._callback_id = -1
+            # get bitres now in case it is changed after write
+            bitres = self._adc_bitres
+            self._bus.transaction(i2c.writing_bytes(self._adc_address,
+                                                            self._adc_config))
+            self._callback = callback
+            if callback:
+                # use the User's callback
+                if (bitres == 18):
+                    self._callback_id = self._master.after(self._adc_delay, self._read_18)
+                elif (bitres == 16):
+                    self._callback_id = self._master.after(self._adc_delay, self._read_16)
+                elif (bitres == 14):
+                    self._callback_id = self._master.after(self._adc_delay, self._read_14)
+                elif (bitres == 12):
+                    self._callback_id = self._master.after(self._adc_delay, self._read_12)
+                else:
+                    raise Exception(_PROGRAM_ERROR_MESSAGE)
+                return
+            else:
+                # no callback, block & spin
+                if (bitres == 18):
+                    return self._read_18()
+                elif (bitres == 16):
+                    return self._read_16()
+                elif (bitres == 14):
+                    return self._read_14()
+                elif (bitres == 12):
+                    return self._read_12()
+                else:
+                    raise Exception(_PROGRAM_ERROR_MESSAGE)
+        else:
+            raise Exception("Busy")
+
     # remove prefix underscore (and this comment) when complete,
     # should also provide a callback method.
     def _read_next(self):
@@ -390,6 +542,7 @@ class ADC:
         """
         Shut down the hardware and free all resources.
         """
+        self.read_callback_cancel()
         self._lock.release()
 
 def main():

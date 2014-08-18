@@ -48,15 +48,16 @@ _DDS_RESET = 22
 # DDS crystal oscillator frequency in HZ (assumes 125MHz xtal)
 _DDS_XTAL_CLK = 125000000
 
-_DDS_K_FACTOR = (4294967296/_DDS_XTAL_CLK)
+# program doubleword = frequency * (2^32 / xtal clock)
+_DDS_K_FACTOR = (4294967296 / _DDS_XTAL_CLK)
 
 class DDS:
 
     # Serial Number
     _sernum = 20140707
 
-    # Version 0 Revision 3
-    _vernum = 0.3
+    # Version 0 Revision 4
+    _vernum = 0.4
 
     # FIXME: specify supported hardware
     # EIModule ADS9850 Signal Generator Module http://www.eimodule.com
@@ -84,13 +85,17 @@ class DDS:
         GPIO.setup(_DDS_RESET, GPIO.OUT)
         GPIO.output(_DDS_RESET, False)
 
+        self._pulse_high(_DDS_RESET)
+        self._pulse_high(_DDS_W_CLK)
+        self._pulse_high(_DDS_FQ_UD)
+
     def version(self):
         """
         Returns the Module API Version & Revision number for identification.
         """
         return self._vernum
 
-    def _pulse_high(self,pin):
+    def _pulse_high(self, pin):
         """
         Raise and Lower the defined GPIO pin.
 
@@ -100,29 +105,28 @@ class DDS:
         GPIO.output(pin, False)
         return
 
-    def _writeb(self,data):
+    def _writeb(self, data):
         """
         Write a byte to the AD9850 DDS serially.
 
         Internal Method.
         """
-        for i in range (0,8):
+        for i in range (0, 8):
             GPIO.output(_DDS_DATA, data & 0x01)
             self._pulse_high(_DDS_W_CLK)
-            data=data>>1
+            data = data >> 1
         return
 
-    def set_frequency(self,freq):
+    def set_wave(self, freq = 0, phase = 0):
         """
-        Program the AD9850 DDS to output the specified frequency.
+        Program the AD9850 DDS to output the specified wave.
         """
-        self._pulse_high(_DDS_W_CLK)
-        self._pulse_high(_DDS_FQ_UD)
-        freq=int(freq*_DDS_K_FACTOR)
-        for b in range (0,4):
+        freq = int(freq * _DDS_K_FACTOR)
+        for b in range (0, 4):
             self._writeb(freq & 0xFF)
-            freq=freq>>8
-        self._writeb(0x00)
+            freq = freq >> 8
+        phase = (phase << 3) & 0xF8
+        self._writeb(phase)
         self._pulse_high(_DDS_FQ_UD)
         return
 
@@ -130,9 +134,7 @@ class DDS:
         """
         Power down the AD9850.
         """
-        self._pulse_high(_DDS_W_CLK)
-        self._pulse_high(_DDS_FQ_UD)
-        for b in range (0,4):
+        for b in range (0, 4):
             self._writeb(0)
         self._writeb(0x04)
         self._pulse_high(_DDS_FQ_UD)
@@ -143,6 +145,8 @@ class DDS:
         Reset the AD9850 DDS registers (disables the output waveform).
         """
         self._pulse_high(_DDS_RESET)
+        self._pulse_high(_DDS_W_CLK)
+        self._pulse_high(_DDS_FQ_UD)
         return
 
     def exit(self):

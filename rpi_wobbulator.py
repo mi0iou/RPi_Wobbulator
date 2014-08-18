@@ -405,20 +405,13 @@ class WobbyPi():
         self.b_save.grid(row = 0, column = 4)
 
         if not _has_wobbulator:
-            #self.b_undo.configure(state='disabled')
-            #self.b_save.configure(state='disabled')
             self.b_action.configure(state='disabled')
             self.b_sweep.configure(state='disabled')
             self.b_reset.configure(state='disabled')
             self.e_stepf.configure(state='disabled')
             e_stopf.configure(state='disabled')
             e_startf.configure(state='disabled')
-            #cb_colcyc.configure(state='disabled')
             cb_autostep.configure(state='disabled')
-            #cb_memstore.configure(state='disabled')
-            #cb_record.configure(state='disabled')
-            #cb_clear.configure(state='disabled')
-            #cb_graticule.configure(state='disabled')
 
         canvas.update_idletasks()
 
@@ -805,16 +798,19 @@ www.asliceofraspberrypi.co.uk\n\
         self.trace_header.update({'Desc' : self.desc.get()})
 
     def freq_update(self, event):
-        self.label_xscale()
+        stop = self.fconv(self.fstop.get())
+        if stop > 62500000:
+            stop = 62500000
+            self.fstop.set(stop)
         if self.autostep.get():
             """ Fill step field with suitable value """
             start = self.fconv(self.fstart.get())
-            stop = self.fconv(self.fstop.get())
             span = stop - start
             # one pixel per step
             step = int(span / self.chrtWid)
-            self.e_stepf.delete(0,END)
+            self.e_stepf.delete(0, END)
             self.e_stepf.insert(0, step)
+        self.label_xscale()
         self.reflect_state()
 
     def step_update(self, event):
@@ -826,10 +822,10 @@ www.asliceofraspberrypi.co.uk\n\
         for key, lineID in self.line_buffer.items():
             canvas.delete(lineID)
         self.line_buffer.clear()
-        canvas.update_idletasks()
 
         if self._imm_record:
             del self.trace_list[len(self.trace_list)-1]
+
         if not len(self.trace_list):
             # FIXME: better than nothing
             self.b_save.config(state = DISABLED)
@@ -1181,7 +1177,7 @@ www.asliceofraspberrypi.co.uk\n\
         if (self.sweep_start_reqd or (self._imm_startfreq != startfreq) or
                                         (self._imm_stopfreq != stopfreq) or
                                             (self._imm_stepfreq != stepfreq)):
-            if (startfreq > stopfreq) or (stepfreq < 1):
+            if (startfreq > stopfreq) or (stepfreq < 1) or (stopfreq > 62500000):
                 self.invalid_sweep('The frequency selection settings are invalid')
                 return
             # immutable variables, may not change during a sweep
@@ -1210,7 +1206,7 @@ www.asliceofraspberrypi.co.uk\n\
         # Reset immediately before setting frequency
         self.dds.reset()
         # program the DDS to output the required frequency
-        self.dds.set_frequency(startfreq)
+        self.dds.set_wave(startfreq)
         # compensate for errors in first readings
         self.compensate()
         # take voltage reading
@@ -1330,7 +1326,6 @@ www.asliceofraspberrypi.co.uk\n\
     def trace_iterate(self, trace):
         for freq in sorted(trace):
             self.reading = self.load_adapt(trace[freq])
-            #self.reading = trace[freq]
             yield freq
 
     def sweep_iterate(self, start, finish, step):
@@ -1339,9 +1334,9 @@ www.asliceofraspberrypi.co.uk\n\
             if freq > self._imm_stopfreq:
                 freq = self._imm_stopfreq
             # Reset immediately before setting frequency
-            self.dds.reset()
+            #self.dds.reset()
             # program the DDS to output the required frequency
-            self.dds.set_frequency(freq)
+            self.dds.set_wave(freq)
             # take a reading at the required frequency
             self.reading = self.adc.read()
             yield freq
@@ -1369,7 +1364,7 @@ www.asliceofraspberrypi.co.uk\n\
         # to allow current sweep to complete
         self.oneflag = True
         self.b_sweep['text'] = 'Abort'
-        self.b_sweep['command'] = self.reset_sweep
+        self.b_sweep['command'] = self.abort_sweep
         self.b_action.config(state = DISABLED)
 
     def single_sweep(self):
@@ -1377,9 +1372,8 @@ www.asliceofraspberrypi.co.uk\n\
         #tstart = time.time()
         self.oneflag = True
         self.b_sweep['text'] = 'Abort'
-        self.b_sweep['command'] = self.reset_sweep
+        self.b_sweep['command'] = self.abort_sweep
         self.b_action.config(state = DISABLED)
-
         self.b_undo.config(state = DISABLED)
         self.b_save.config(state = DISABLED)
         self.b_reset['command'] = self.reset_sweep
@@ -1392,12 +1386,27 @@ www.asliceofraspberrypi.co.uk\n\
         self.b_action['text'] = 'Stop'
         self.b_action['command'] = self.cycle_stop
         self.b_sweep.config(state = DISABLED)
-
         self.b_undo.config(state = DISABLED)
         self.b_save.config(state = DISABLED)
         self.b_reset['command'] = self.reset_sweep
         self.b_reset.config(state = NORMAL)
         self.sweep_start()
+
+    def abort_sweep(self):
+        """ abort during physical sweep """
+        root.after_cancel(self._callback_id)
+        self.dds.reset()
+
+        for key, lineID in self.line_buffer.items():
+            canvas.delete(lineID)
+        self.line_buffer.clear()
+
+        self.b_action['text'] = 'Cycle'
+        self.b_action['command'] = self.cycle_sweep
+        self.b_sweep.config(state = NORMAL)
+        self.b_sweep['text'] = 'Sweep'
+        self.b_sweep['command'] = self.single_sweep
+        self.b_action.config(state = NORMAL)
 
     def reset_sweep(self):
         """ reset during physical sweep """
@@ -1528,7 +1537,14 @@ www.asliceofraspberrypi.co.uk\n\
         self.b_reset.config(state = DISABLED)
         self.b_undo.config(state = DISABLED)
         self.b_save.config(state = DISABLED)
-        filename = filedialog.asksaveasfilename()
+        ttl = 'Save Canvas Image'
+        ft = (("portable document format", "*.pdf"),
+                                        ("Portable Document Format", "*.PDF"),
+                                                        ("postscript", "*.ps"),
+                                                        ("PostScript", "*.PS"),
+                                                        ("All files", "*.*"))
+        filename = filedialog.asksaveasfilename(defaultextension='.pdf',
+                                                        title=ttl, filetypes=ft)
         if filename:
             fname, fext = os.path.splitext(filename)
             if fext.upper() == '.PDF':
@@ -1538,10 +1554,9 @@ www.asliceofraspberrypi.co.uk\n\
                 if self.reformat_ps(ftemp.name):
                     ftemp.seek(0)
                     try:
-                        process = subprocess.Popen(['/usr/bin/ps2pdf',
+                        process = subprocess.Popen(['ps2pdf',
                                                         ftemp.name, filename])
                     except OSError:
-                        ftemp.close()
                         messagebox.showerror('Conversion Error',
                                         'please check "ps2pdf" is installed')
                     else:
@@ -1574,16 +1589,19 @@ www.asliceofraspberrypi.co.uk\n\
         chooses to use, but change the font size to make it readable.
         """
         pixelsize = self.text_font[1]
-        args = [ '/bin/sed', '-i']
+        args = [ 'sed', '-i']
         args.extend([ '-e', 's/findfont ' + pixelsize + '/findfont 12/g'])
         args.extend([fn_ps])
         try:
             process = subprocess.Popen(args)
         except OSError:
-            messagebox.showerror('Undefined Error', 'an error ocurred')
+            messagebox.showerror('Re-formatting Error',
+                                        'please check "sed" is installed')
             return False
         else:
             process.wait()
+        if process.returncode < 0:
+            return False
         return True
 
 # Check for presence of RPi Wobbulator on i2c bus
@@ -1591,13 +1609,15 @@ _has_wobbulator = False
 try:
     i2c_op = str(subprocess.check_output(('i2cdetect', '-y', '1')))
 except FileNotFoundError:
-    print("i2cdetect not found, assuming RPi Wobbulator not present")
+    print("i2cdetect not found (assuming RPi Wobbulator not present)")
 except:
     pass
 else:
     if i2c_op.find('68') != -1:
         _has_wobbulator = True
 
+if not _has_wobbulator:
+    print("RPi Wobbulator not detected")
 # Assign TK to root
 root = Tk()
 # Set main window title and menubar
@@ -1610,6 +1630,6 @@ app.initialise()
 root.mainloop()
 
 if _has_wobbulator:
-    print("Cleaning up")
+    # tell the library modules to clean up
     app.dds.exit()
     app.adc.exit()
