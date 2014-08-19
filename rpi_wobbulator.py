@@ -127,11 +127,14 @@ from tkinter import simpledialog
 # Class definition for WobbyPi application
 class WobbyPi():
 
-
-    trace_data = {}
     trace_header = {}
+    trace_data = {}
     trace_list = []
+
     line_buffer = {}
+    line_list = []
+
+    undo_list = []
 
     # ghostscript will change the font family but keep the pixelsize
     text_font = ('clean','8')
@@ -338,7 +341,7 @@ class WobbyPi():
         e_desc = Entry(frame, width = 66, textvariable = self.desc)
         e_desc.grid(row = 7, column = 1, columnspan = 4)
         e_desc.bind('<Key-Return>', self.desc_update)
-        e_desc.insert(0, 'Mouse-Left-Click exactly on the sweep trace')
+        e_desc.insert(0, 'Mouse-Left\Right-Click exactly over sweep trace')
         self.desc_update()
 
         # frequency entries
@@ -391,7 +394,7 @@ class WobbyPi():
         # Button to undo
         self.b_undo = Button(fr_control, text = 'Undo', height = 1, width = 3,
                                     activeforeground = 'red', state = DISABLED,
-                                                    command = self.undo_canvas)
+                                                    command = self.undo)
 
         # Button to save image
         self.b_save = Button(fr_control, text = 'Save', height = 1, width = 3,
@@ -455,12 +458,12 @@ class WobbyPi():
                                                                 underline = 0)
         help.add_command(label = 'About Wobbulator', command = self.showAbout,
                                                                 underline = 0)
-        # FIXME: implement me
-        #m_file.entryconfig(1, state=DISABLED)
-        #m_file.entryconfig(2, state=DISABLED)
+        m_file.entryconfig(1, state=DISABLED)
+        m_file.entryconfig(2, state=DISABLED)
 
     def not_done(self):
         messagebox.showerror('Not implemented', 'Not yet available')
+        return
 
     def showHelp(self):
         helpmsg = "\
@@ -482,6 +485,7 @@ class WobbyPi():
 [CC]  - Colour Cycle after sweep\n\
 "
         messagebox.showinfo('Help', helpmsg)
+        return
 
     def showAbout(self):
         aboutmsg = "\
@@ -497,6 +501,7 @@ tom@asliceofraspberrypi.co.uk\n\
 www.asliceofraspberrypi.co.uk\n\
 "
         messagebox.showinfo('About RPi Wobbulator', aboutmsg)
+        return
 
     def getForegroundColor(self):
         fgColor = colorchooser.askcolor(params['canvFg'],
@@ -504,6 +509,7 @@ www.asliceofraspberrypi.co.uk\n\
         if fgColor[1] != 'None':
             params['canvFg'] = fgColor[1]
             self.canvFg = fgColor[1]
+        return
 
     def getBackgroundColor(self):
         bgColor = colorchooser.askcolor(params['canvBg'],
@@ -512,6 +518,7 @@ www.asliceofraspberrypi.co.uk\n\
             params['canvBg'] = bgColor[1]
             self.canvBg = bgColor[1]
             canvas.configure(background=self.canvBg)
+        return
 
     def getChartWidth(self):
         chrtWid = simpledialog.askinteger('Chart Width', '300 to 1000',
@@ -520,6 +527,7 @@ www.asliceofraspberrypi.co.uk\n\
         if chrtWid != 'None':
             params['chrtWid'] = chrtWid
             self.chrtWid = chrtWid
+        return
 
     def getChartHeight(self):
         chrtHt = simpledialog.askinteger('Chart Height', '300 to 1000',
@@ -528,6 +536,7 @@ www.asliceofraspberrypi.co.uk\n\
         if chrtHt != 'None':
             params['chrtHt'] = chrtHt
             self.chrtHt = chrtHt
+        return
 
     def getXdivisions(self):
         xDivs = simpledialog.askinteger('X-divisions', '10-50',
@@ -536,6 +545,7 @@ www.asliceofraspberrypi.co.uk\n\
         if xDivs != 'None':
             params['xDivs'] = xDivs
             self.xDivs = xDivs
+        return
 
     def getYdivisions(self):
         yDivs = simpledialog.askinteger('Y-divisions', '10-50',
@@ -544,6 +554,7 @@ www.asliceofraspberrypi.co.uk\n\
         if yDivs != 'None':
             params['yDivs'] = yDivs
             self.yDivs = yDivs
+        return
 
     def save_params(self):
         global params
@@ -573,6 +584,7 @@ www.asliceofraspberrypi.co.uk\n\
                 pickle.dump(params, paramFile)
             except pickle.PicklingError:
                 messagebox.showerror('File Error', 'An error occurred')
+        return
 
     def file_load(self):
         ttl = 'Load Wobbulator Trace File'
@@ -599,6 +611,7 @@ www.asliceofraspberrypi.co.uk\n\
             else:
                 messagebox.showerror('Bad file extension',
                 'Only WTF file format is supported\nPlease specify ".wtf" file suffix')
+        return
 
     def file_save(self):
         if len(self.trace_list):
@@ -623,6 +636,7 @@ www.asliceofraspberrypi.co.uk\n\
         else:
             messagebox.showerror('No recorded data',
                     'Record data before attempting save')
+        return
 
     def file_export(self):
         # could disable file_export instead...
@@ -646,10 +660,12 @@ www.asliceofraspberrypi.co.uk\n\
         else:
             messagebox.showerror('No recorded data',
                     'Record data before attempting export')
+        return
 
     def exit(self):
         """ exit, tidy up after GUI destruction """
         root.destroy()
+        return
 
     def initialise(self):
         """ Initialise variables, buffers, and state """
@@ -662,24 +678,32 @@ www.asliceofraspberrypi.co.uk\n\
             self.b_action.config(state = DISABLED)
             self.b_sweep.config(state = DISABLED)
             self.b_reset.config(state = DISABLED)
-            self.b_save.config(state = DISABLED)
+            self.reflect_save_state(False)
         self.fresh_canvas()
         self.colour_sync()
         self.sweep_start_reqd = True
-        self.trace_list_reset()
         self.memstore_reset()
         canvas.tag_bind('plot', "<1>", self.mouse_leftdown)
         canvas.tag_bind('plot', "<B1-ButtonRelease>", self.mouse_leftup)
+        canvas.tag_bind('plot', "<3>", self.mouse_rightdown)
+        canvas.tag_bind('plot', "<B3-ButtonRelease>", self.mouse_rightup)
+        return
 
     # clear the canvas
     def fresh_canvas(self):
         """ reclaim and re-draw canvas area """
         canvas.delete('plot')
+        canvas.delete('marker')
         self.memstore_reset()
         self.label_yscale()
         self.label_xscale()
         self.graticule_update()
         self.desc_update()
+
+        self.undo_list_reset()
+        self.line_list_reset()
+        self.trace_list_reset()
+        return
 
     # display graticule
     def graticule_update(self):
@@ -731,6 +755,7 @@ www.asliceofraspberrypi.co.uk\n\
             canvas.create_line(self.mrgnLeft, y, self.mrgnLeft + self.chrtWid,
                                     y, fill = self.canvFg, tag = 'graticule')
         canvas.update_idletasks()
+        return
 
     def reflect_state(self):
         if (self._imm_startfreq == self.fconv(self.fstart.get()) and
@@ -740,11 +765,13 @@ www.asliceofraspberrypi.co.uk\n\
                                     (self._imm_ipchan == self.ipchan.get() or
                             self._imm_ipchan != 2 and self.ipchan.get() != 2)):
             self.sweep_start_reqd = False
-            if len(self.line_buffer):
-                self.b_save.config(state = NORMAL)
+            #if len(self.line_buffer):
+            if len(self.trace_list):
+                self.reflect_save_state(True)
         else:
-            self.b_save.config(state = DISABLED)
+            self.reflect_save_state(False)
             self.sweep_start_reqd = True
+        return
 
     def ipchan_update(self):
         """ input channel change, effect and adjust y-scale labels """
@@ -752,6 +779,7 @@ www.asliceofraspberrypi.co.uk\n\
         self.adc.set_ipchan(ipchan)
         self.label_yscale()
         self.reflect_state()
+        return
 
     def gain_update(self):
         """ gain change, effect and adjust y-scale labels """
@@ -759,15 +787,18 @@ www.asliceofraspberrypi.co.uk\n\
         self.adc.set_gain(gain)
         self.label_yscale()
         self.reflect_state()
+        return
 
     def bitres_update(self):
         """ bit resolution change, effect """
         bitres = self.bitres.get()
         self.adc.set_bitres(bitres)
+        return
 
     def colour_update(self):
         """ colour\cycling change, synchronise colour cycling """
         self.colour_sync()
+        return
 
     def record_update(self):
         """ record sweep state change, placeholder """
@@ -777,10 +808,12 @@ www.asliceofraspberrypi.co.uk\n\
         """ memory store state change """
         if not self.memstore.get():
             self.memstore_reset()
-            canvas.delete("plot")
+            canvas.delete('plot')
+            canvas.delete('marker')
             # reclaiming plot tags may remove wanted trace
             # not reclaiming plot tags may leave unwanted trace
             # lose : lose
+        return
 
     def autostep_update(self):
         """ enable\disable automatic frequency step update, placeholder """
@@ -796,51 +829,84 @@ www.asliceofraspberrypi.co.uk\n\
         # update the description in the trace header to
         # allow defining\changing it *after* sweep recording
         self.trace_header.update({'Desc' : self.desc.get()})
+        return
 
     def freq_update(self, event):
+        """ Update Start\Stop\Step parameters on Start\Stop frequency change """
         stop = self.fconv(self.fstop.get())
+        # maximum permissible frequency is 'crystal clock / 2'
         if stop > 62500000:
             stop = 62500000
             self.fstop.set(stop)
         if self.autostep.get():
-            """ Fill step field with suitable value """
+            # fill step field with suitable value
             start = self.fconv(self.fstart.get())
             span = stop - start
             # one pixel per step
             step = int(span / self.chrtWid)
+            # update the GUI, informing User
             self.e_stepf.delete(0, END)
             self.e_stepf.insert(0, step)
         self.label_xscale()
         self.reflect_state()
+        return
 
     def step_update(self, event):
         self.reflect_state()
+        return
 
-    def undo_canvas(self):
-        self.b_undo.config(state = DISABLED)
-
+    def undo_trace(self, tag = ""):
+        """ Remove the current trace, restoring canvas previous sweep state """
+        # delete the 'current' trace from the canvas
         for key, lineID in self.line_buffer.items():
             canvas.delete(lineID)
         self.line_buffer.clear()
 
+        if len(self.line_list):
+            # remove the 'current' trace from the list
+            self.line_list.pop()
+            # copy any previous trace from the list making it 'current'
+            if len(self.line_list):
+                self.line_buffer = deepcopy(self.line_list[len(self.line_list)-1])
+        else:
+            # program error, should always be at least one
+            assert False
+
+        # FIXME: by also 'undo'ing immutable state changes the following
+        # will automagically work and be FIXED!
+
         if self._imm_record:
-            del self.trace_list[len(self.trace_list)-1]
+            # FIXME: fataly assumes record state never changed.
+            # remove the 'was current' trace from the record list
+            if len(self.trace_list):
+                del self.trace_list[len(self.trace_list)-1]
 
-        if not len(self.trace_list):
-            # FIXME: better than nothing
-            self.b_save.config(state = DISABLED)
+        self.reflect_save_state(len(self.trace_list))
 
+        # FIXME: will only work for the first 'undo' occurrence
         if self.colcyc.get():
             while self._colour_cycle != self._imm_colour:
                 self.colour_next()
+        return
 
+    def reflect_save_state(self, state):
+        if state:
+            self.m_file.entryconfig(1, state = NORMAL)
+            self.m_file.entryconfig(2, state = NORMAL)
+            self.b_save.config(state = NORMAL)
+        else:
+            # nothing to be saved
+            self.m_file.entryconfig(1, state = DISABLED)
+            self.m_file.entryconfig(2, state = DISABLED)
+            self.b_save.config(state = DISABLED)
 
-    def param_to_key(self, dictionary, value):
-        """ lookup dictionary key using a dictionary value """
-        for key, val in dictionary.items():
-            if val == value:
-                return key
-        return None
+    def undo(self):
+        if len(self.undo_list):
+            fn_arg = self.undo_list.pop()
+            if not len(self.undo_list):
+                self.b_undo.config(state = DISABLED)
+            (fn_arg[0])(fn_arg[1])
+        return
 
     def fconv(self,f):
         """
@@ -903,6 +969,7 @@ www.asliceofraspberrypi.co.uk\n\
         canvas.create_text(xpos, ypos + 15, fill = self.canvFg,
                                                 text = fDesc, tag = 'hlabel')
         canvas.update_idletasks()
+        return
 
     def label_yscale(self):
         """ reclaim and display y-axis labels """
@@ -941,6 +1008,7 @@ www.asliceofraspberrypi.co.uk\n\
         canvas.create_text(xpos, ypos, fill = self.canvFg,
                                     text = "\n".join(vDesc), tag = 'vlabel')
         canvas.update_idletasks()
+        return
 
     def simplify_x(self):
         """ simplify x-coordinate calulation  """
@@ -964,6 +1032,7 @@ www.asliceofraspberrypi.co.uk\n\
         self.x2 = ((self.chrtWid * (self._imm_startfreq / self._imm_spanfreq))
                                                             - self.mrgnLeft)
         self.x1 = (self.chrtWid / self._imm_spanfreq)
+        return
 
     def simplify_y(self):
         """ simplify y-coordinate calulation """
@@ -983,6 +1052,7 @@ www.asliceofraspberrypi.co.uk\n\
         # y = int(y1 - (reading * y2))
         self.y2 = (self.chrtHt / self.plotscale)
         self.y1 = (self.chrtHt + self.mrgnTop + (self.plotbias * self.y2))
+        return
 
     def save_adapt(self, reading):
         """
@@ -1019,6 +1089,7 @@ www.asliceofraspberrypi.co.uk\n\
         self.trace_header.update({'BitRes' : self._imm_bitres})
 
         self.trace_header.update({'Desc' : self.desc.get()})
+        return
 
     def compensate(self):
         # compensate for errors in first readings related to a
@@ -1036,6 +1107,7 @@ www.asliceofraspberrypi.co.uk\n\
             u = w
             #print("{} ".format(v), end="")
         #print("{}:{}".format(n, v))
+        return
 
     def trace_init(self, trace_header, trace_list):
         """ perform trace sweep from memory """
@@ -1046,7 +1118,7 @@ www.asliceofraspberrypi.co.uk\n\
         self.b_action.config(state = DISABLED)
         self.b_sweep.config(state = DISABLED)
         self.b_undo.config(state = DISABLED)
-        self.b_save.config(state = DISABLED)
+        self.reflect_save_state(False)
 
         # synchronise wobbulator state to trace header
         try:
@@ -1085,7 +1157,6 @@ www.asliceofraspberrypi.co.uk\n\
 
         self.fresh_canvas()
 
-        self.trace_list_reset()
         if self._imm_record:
             self.trace_save_header()
 
@@ -1098,6 +1169,7 @@ www.asliceofraspberrypi.co.uk\n\
         self.sweep_start_func = self.trace_next
         self.sweep_stop_func = self.trace_stop
         self.trace_next()
+        return
 
     def trace_next(self):
         """ Start trace from list """
@@ -1109,15 +1181,9 @@ www.asliceofraspberrypi.co.uk\n\
         try:
             trace = next(self._list_iterator)
             # FIXME: rather than run into the StopIteration exception,
-            # on the last trace iterator set the 'oneflag' and populate
-            # trace_stop with the code following the except
+            # on the last trace iterator set the 'oneflag'.
         except StopIteration:
-            if _has_wobbulator:
-                self.b_action.config(state = NORMAL)
-                self.b_sweep.config(state = NORMAL)
-            self.b_reset.config(state = NORMAL)
-            self.b_undo.config(state = NORMAL)
-            self.b_save.config(state = NORMAL)
+            self.sweep_stop_func()
             return
         else:
             # Initialise the frequency\reading generator
@@ -1139,10 +1205,10 @@ www.asliceofraspberrypi.co.uk\n\
             if self.cls.get():
                 self.fresh_canvas()
             self.sweep_continue()
+        return
 
     def sweep_start(self):
         """ perform frequency sweep """
-
         # start\stop\stepfreq could be made 'enter key' bind dependant all
         # setting 'sweep_start_reqd' when changed, simplifying code here.
         # Do we wish to force 'Enter'ing on the User ?
@@ -1158,8 +1224,8 @@ www.asliceofraspberrypi.co.uk\n\
 
         # scale and bias are dependant on input channel
         if ipchan == 2:
-            # signal for the DDS to reset
-            self.dds.reset()
+            # set wave to 0 Hz
+            self.dds.set_wave(0)
             # compensate for errors in first readings
             self.compensate()
             # calculate bias from input when no frequency being output
@@ -1190,7 +1256,6 @@ www.asliceofraspberrypi.co.uk\n\
             self._imm_bitres = bitres
             self._imm_record = self.record.get()
             self.fresh_canvas()
-            self.trace_list_reset()
             self.sweep_start_reqd = False
             if self._imm_record:
                 self.trace_save_header()
@@ -1203,8 +1268,6 @@ www.asliceofraspberrypi.co.uk\n\
         # graticule offset for x-coordinate start point
         self.xstart = self.mrgnLeft
 
-        # Reset immediately before setting frequency
-        self.dds.reset()
         # program the DDS to output the required frequency
         self.dds.set_wave(startfreq)
         # compensate for errors in first readings
@@ -1226,6 +1289,7 @@ www.asliceofraspberrypi.co.uk\n\
         self.sweep_start_func = self.sweep_start
         self.sweep_stop_func = self.single_stop
         self.sweep_continue()
+        return
 
     def sweep_continue(self):
         """
@@ -1298,11 +1362,10 @@ www.asliceofraspberrypi.co.uk\n\
             _do_over = (_do_over + 1) % _magic
         # momentarily relinquish to GUI
         self._callback_id = root.after(1, self.sweep_continue)
+        return
 
     def sweep_end(self):
         # completed a full sweep
-
-        self.b_undo.config(state = NORMAL)
 
         if self.colcyc.get():
             # cycle to next colour
@@ -1312,12 +1375,18 @@ www.asliceofraspberrypi.co.uk\n\
             # Save data as a list of 'plot sets'
             self.trace_list.append(deepcopy(self.trace_data))
 
+        self.undo_list.append([self.undo_trace, 'plot'])
+        self.line_list.append(deepcopy(self.line_buffer))
+
+        self.b_undo.config(state = NORMAL)
+
         if self.oneflag:
             # single sweep completed
             self.sweep_stop_func()
         else:
             # schedule a fresh sweep
             self._callback_id = root.after(1, self.sweep_start_func)
+        return
 
     def buf_iterate(self, trace_list):
         for trace in trace_list:
@@ -1333,8 +1402,6 @@ www.asliceofraspberrypi.co.uk\n\
             # correct any overstep
             if freq > self._imm_stopfreq:
                 freq = self._imm_stopfreq
-            # Reset immediately before setting frequency
-            #self.dds.reset()
             # program the DDS to output the required frequency
             self.dds.set_wave(freq)
             # take a reading at the required frequency
@@ -1343,7 +1410,13 @@ www.asliceofraspberrypi.co.uk\n\
 
     def trace_stop(self):
         """ stop trace sweep """
-        assert False
+        if _has_wobbulator:
+            self.b_action.config(state = NORMAL)
+            self.b_sweep.config(state = NORMAL)
+        self.b_reset.config(state = NORMAL)
+        self.b_undo.config(state = NORMAL)
+        self.reflect_save_state(True)
+        return
 
     def single_stop(self):
         """ stop single sweep """
@@ -1351,9 +1424,10 @@ www.asliceofraspberrypi.co.uk\n\
         self.b_sweep['text'] = 'Sweep'
         self.b_sweep['command'] = self.single_sweep
         self.b_action.config(state = NORMAL)
-        self.b_save.config(state = NORMAL)
+        self.reflect_save_state(True)
         #tstop = time.time()
         #print(str(int(tstop) - int(tstart)))
+        return
 
     def cycle_stop(self):
         """ stop cyclic sweeps """
@@ -1366,6 +1440,7 @@ www.asliceofraspberrypi.co.uk\n\
         self.b_sweep['text'] = 'Abort'
         self.b_sweep['command'] = self.abort_sweep
         self.b_action.config(state = DISABLED)
+        return
 
     def single_sweep(self):
         """ start single sweep """
@@ -1375,10 +1450,11 @@ www.asliceofraspberrypi.co.uk\n\
         self.b_sweep['command'] = self.abort_sweep
         self.b_action.config(state = DISABLED)
         self.b_undo.config(state = DISABLED)
-        self.b_save.config(state = DISABLED)
+        self.reflect_save_state(False)
         self.b_reset['command'] = self.reset_sweep
         self.b_reset.config(state = NORMAL)
         self.sweep_start()
+        return
 
     def cycle_sweep(self):
         """ start cyclic sweeps """
@@ -1387,10 +1463,11 @@ www.asliceofraspberrypi.co.uk\n\
         self.b_action['command'] = self.cycle_stop
         self.b_sweep.config(state = DISABLED)
         self.b_undo.config(state = DISABLED)
-        self.b_save.config(state = DISABLED)
+        self.reflect_save_state(False)
         self.b_reset['command'] = self.reset_sweep
         self.b_reset.config(state = NORMAL)
         self.sweep_start()
+        return
 
     def abort_sweep(self):
         """ abort during physical sweep """
@@ -1407,36 +1484,34 @@ www.asliceofraspberrypi.co.uk\n\
         self.b_sweep['text'] = 'Sweep'
         self.b_sweep['command'] = self.single_sweep
         self.b_action.config(state = NORMAL)
+        return
+
+    def reset_common(self):
+        root.after_cancel(self._callback_id)
+        self.sweep_start_reqd = True
+        self.fresh_canvas()
+        self.memstore_reset()
+        self.reflect_save_state(False)
 
     def reset_sweep(self):
         """ reset during physical sweep """
-        root.after_cancel(self._callback_id)
+        self.reset_common()
         self.dds.reset()
-        self.sweep_start_reqd = True
-        self.fresh_canvas()
-        self.trace_list_reset()
-        self.memstore_reset()
         self.b_action['text'] = 'Cycle'
         self.b_action['command'] = self.cycle_sweep
         self.b_sweep.config(state = NORMAL)
         self.b_sweep['text'] = 'Sweep'
         self.b_sweep['command'] = self.single_sweep
         self.b_action.config(state = NORMAL)
-        self.b_undo.config(state = DISABLED)
-        self.b_save.config(state = DISABLED)
+        return
 
     def reset_trace(self):
         """ reset during trace load """
-        root.after_cancel(self._callback_id)
-        self.sweep_start_reqd = True
-        self.fresh_canvas()
-        self.trace_list_reset()
-        self.memstore_reset()
+        self.reset_common()
         if _has_wobbulator:
             self.b_sweep.config(state = NORMAL)
             self.b_action.config(state = NORMAL)
-        self.b_undo.config(state = DISABLED)
-        self.b_save.config(state = DISABLED)
+        return
 
     def history_invalidated(self):
         pass
@@ -1455,6 +1530,7 @@ www.asliceofraspberrypi.co.uk\n\
             messagebox.showerror('Invalid Settings', msg)
         else:
             messagebox.showerror('Invalid Settings', 'The chosen parameters are invalid')
+        return
 
     def mouse_leftdown(self, event):
         """ display mousepointer volts\hertz text """
@@ -1470,21 +1546,51 @@ www.asliceofraspberrypi.co.uk\n\
         # y = int(self.y1 - (reading * self.y2))
         # voltage = (y1 - y) / y2
         v = ((self.y1 - event.y) / self.y2) / self._imm_gain
-        vhstr = 'Volts:{}\nHertz:{}'.format(v, f)
+        #vhstr = 'Volts:{}\nHertz:{}'.format(v, f)
+        vhstr = '{} V\n{} Hz'.format(v, f)
         # FIXME: automate font colour to contrast canvBg
-        canvas.create_text(event.x, event.y - 15, anchor = CENTER,
+        canvas.create_text(event.x, event.y - 20, anchor = CENTER,
                                     fill = 'white', font = self.text_font,
                                             text = vhstr, tag = 'vhtext')
+        return
 
     def mouse_leftup(self, event):
         """ remove mousepointer volts\hertz text """
         canvas.delete('vhtext')
+        return
 
     def colour_iterate(self):
         """ generator for colour options """
         for key, colour in self._colour_option.items():
             self._colour_cycle = colour
             yield key
+
+    def mouse_rightdown(self, event):
+        f = int((event.x + self.x2) / self.x1)
+        v = ((self.y1 - event.y) / self.y2) / self._imm_gain
+        #vhstr = 'Volts:{}\nHertz:{}'.format(v, f)
+        vhstr = '{} V\n{} Hz'.format(v, f)
+        ID_list = []
+        itemID = canvas.create_text(event.x, event.y - 20, anchor = CENTER,
+                                    fill = 'white', font = self.text_font,
+                                            text = vhstr, tag = 'marker')
+        ID_list.append(itemID)
+        itemID = canvas.create_line(event.x - 3, event.y - 3,
+                    event.x + 4, event.y + 4, fill = 'white', tag = 'marker')
+        ID_list.append(itemID)
+        itemID = canvas.create_line(event.x - 3, event.y + 3,
+                    event.x + 4, event.y - 4, fill = 'white', tag = 'marker')
+        ID_list.append(itemID)
+        self.undo_list.append([self.undo_marker, deepcopy(ID_list)])
+        return
+
+    def undo_marker(self, markerIDs):
+        while len(markerIDs):
+            marker = markerIDs.pop()
+            canvas.delete(marker)
+
+    def mouse_rightup(self, event):
+        pass
 
     def colour_cycle(self):
         """ Return the next key in the colour cycle. """
@@ -1505,12 +1611,14 @@ www.asliceofraspberrypi.co.uk\n\
         """ Synchronise the colour cycle to the User selected colour. """
         while self._colour_cycle != self.colour.get():
             self.colour_cycle()
+        return
 
     def colour_next(self):
         """ Set the active colour to the next colour in the cycle. """
         key = self.colour_cycle()
         # Be careful, select() not invoke()
         self._colour_button[key].select()
+        return
 
     def memstore_reset(self):
         """
@@ -1520,15 +1628,32 @@ www.asliceofraspberrypi.co.uk\n\
         NOTE: the trace plot is not removed from the canvas.
         """
         self.line_buffer.clear()
-        self.b_undo.config(state = DISABLED)
+        return
 
     def trace_list_reset(self):
         """
-        Wipe the trace buffer store and flag as invalid
+        Initialise\Wipe the trace buffer store
         """
         self.trace_data.clear()
         self.trace_header.clear()
         self.trace_list[:] = []
+        self.reflect_save_state(False)
+        return
+
+    def line_list_reset(self):
+        """
+        Initialise\Wipe the line list
+        """
+        self.line_list[:] = []
+        return
+
+    def undo_list_reset(self):
+        """
+        Initialise\Wipe the undo list
+        """
+        self.undo_list[:] = []
+        self.b_undo.config(state = DISABLED)
+        return
 
     # FIXME: not enough try's
     def save_canvas(self):
@@ -1536,7 +1661,7 @@ www.asliceofraspberrypi.co.uk\n\
         self.b_sweep.config(state = DISABLED)
         self.b_reset.config(state = DISABLED)
         self.b_undo.config(state = DISABLED)
-        self.b_save.config(state = DISABLED)
+        self.reflect_save_state(False)
         ttl = 'Save Canvas Image'
         ft = (("portable document format", "*.pdf"),
                                         ("Portable Document Format", "*.PDF"),
@@ -1577,7 +1702,8 @@ www.asliceofraspberrypi.co.uk\n\
             self.b_sweep.config(state = NORMAL)
         self.b_reset.config(state = NORMAL)
         self.b_undo.config(state = NORMAL)
-        self.b_save.config(state = NORMAL)
+        self.reflect_save_state(True)
+        return
 
     def reformat_ps(self, fn_ps):
         """
