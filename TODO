@@ -6,17 +6,19 @@ WIP: Add docstrings
 
 WIP: Attempt to abide to PEP-8
 
+DONE: change to 'fileencoding=utf-8' and add '-*- coding: utf-8 -*-' for python3
 DONE: Add 'fileencoding=ascii' to the vim editor (2nd) line to comply with PEP-0263
 
 RPi_Wobbulator
 ~~~~~~~~~~~~~~
-WIP: Implement file sweep record\playback
 
+Add keybindings for keyboard menu operation
 Format Help & About messagebox text
 
 Consider:
 Trace removal could be more fine-grained by using trace colour as the tag
 
+DONE: Implement file sweep record\playback
 DONE: Include 'Description' in image
 DONE: Be consistent about 'Version', derive every occurrance from the same definition
 DONE: Border vertical & horizontal scale labels when no graticule is displayed

@@ -1,5 +1,6 @@
 #!/usr/bin/python3
-# vim:ai:sw=4:ts=8:et:fileencoding=ascii
+# -*- coding: utf-8 -*-
+# vim:ai:sw=4:ts=8:et:fileencoding=utf-8
 #
 # Based on RPi Wobbulator v2.7.1
 #
@@ -50,6 +51,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import time
+import math
 
 # import GUI module
 from tkinter import *
@@ -341,7 +343,7 @@ class WobbyPi():
         e_desc = Entry(frame, width = 66, textvariable = self.desc)
         e_desc.grid(row = 7, column = 1, columnspan = 4)
         e_desc.bind('<Key-Return>', self.desc_update)
-        e_desc.insert(0, 'Mouse-Left\Right-Click exactly over sweep trace')
+        e_desc.insert(0, 'Mouse (Left-Click)\(Right-Click-And-Move) on sweep trace')
         self.desc_update()
 
         # frequency entries
@@ -417,6 +419,8 @@ class WobbyPi():
             cb_autostep.configure(state='disabled')
 
         canvas.update_idletasks()
+        self._colour_mld_bind = {0:self.mld_red, 1:self.mld_magenta, 2:self.mld_yellow, 3:self.mld_green, 4:self.mld_blue}
+        self._colour_mrd_bind = {0:self.mrd_red, 1:self.mrd_magenta, 2:self.mrd_yellow, 3:self.mrd_green, 4:self.mrd_blue}
 
     def makemenu(self, win):
         global root
@@ -449,6 +453,9 @@ class WobbyPi():
         opt.add_command(label = 'Y-divisions', command = self.getYdivisions,
                                                                 underline = 0)
         opt.add_separator()
+        opt.add_command(label = 'Calibrate dBm', command = self.calibrate,
+                                                                underline = 0)
+        opt.add_separator()
         opt.add_command(label = 'Save settings', command = self.save_params,
                                                                 underline = 0)
 
@@ -460,6 +467,8 @@ class WobbyPi():
                                                                 underline = 0)
         m_file.entryconfig(1, state=DISABLED)
         m_file.entryconfig(2, state=DISABLED)
+        if not _has_wobbulator:
+            opt.entryconfig(8, state=DISABLED)
 
     def not_done(self):
         messagebox.showerror('Not implemented', 'Not yet available')
@@ -614,6 +623,7 @@ www.asliceofraspberrypi.co.uk\n\
         return
 
     def file_save(self):
+        # disabled file_save instead...
         if len(self.trace_list):
             ttl = 'Save Wobbulator Trace File'
             ft = (("Wobbulator Trace Files", "*.wtf"),("All files", "*.*"))
@@ -639,7 +649,7 @@ www.asliceofraspberrypi.co.uk\n\
         return
 
     def file_export(self):
-        # could disable file_export instead...
+        # disabled file_export instead...
         if len(self.trace_list):
             ttl = 'Export Wobbulator Trace File'
             ft = (("Comma Seperated Values", "*.csv"),("All files", "*.*"))
@@ -683,16 +693,229 @@ www.asliceofraspberrypi.co.uk\n\
         self.colour_sync()
         self.sweep_start_reqd = True
         self.memstore_reset()
-        canvas.tag_bind('plot', "<1>", self.mouse_leftdown)
-        canvas.tag_bind('plot', "<B1-ButtonRelease>", self.mouse_leftup)
-        canvas.tag_bind('plot', "<3>", self.mouse_rightdown)
-        canvas.tag_bind('plot', "<B3-ButtonRelease>", self.mouse_rightup)
+        # <MouseWheel> = <Button-4> and <Button-5>#
+
+        for key, val in self._colour_mld_bind.items():
+            tag = 'p_' + self._colour_option[key]
+            canvas.tag_bind(tag, "<1>", val)
+            canvas.tag_bind(tag, "<B1-ButtonRelease>", self.mlu_common)
+        for key, val in self._colour_mrd_bind.items():
+            tag = 'p_' + self._colour_option[key]
+            canvas.tag_bind(tag, "<3>", val)
+            canvas.tag_bind(tag, "<B3-Motion>", self.mrd_movement)
+            canvas.tag_bind(tag, "<B3-ButtonRelease>", self.mru_common)
+        return
+
+    def mrd_movement(self, event):
+        """ Mouse Right Button Down & Movement """
+        # erase current mark
+        self.undo()
+        # redraw mark at new position
+        colour = self.canvFg
+        ID_list = []
+        self.place_marker(ID_list, event.x, event.y, colour)
+        self.undo_list.append([self.undo_marker, deepcopy(ID_list)])
+        del ID_list
+        return
+
+    def mru_common(self, event):
+        """ Mouse Right Button Up """
+        # erase current mark
+        self.undo()
+        # redraw mark at position in correct colour
+        colour = self.marker['colour']
+        ID_list = []
+        self.place_marker(ID_list, event.x, event.y, colour)
+        self.undo_list.append([self.undo_marker, deepcopy(ID_list)])
+        del ID_list
+        return
+
+    def mrd_common(self, event, colour):
+        """ Mouse Right Button Down """
+        # Issues with tkinter
+        # BUG: depressing right mouse button before releasing
+        # left button can cause the left release to be missed.
+        # BUG: depressing left mouse button over trace then
+        # moving mouse off trace and depressing right button
+        # (off trace) invokes mrd_?????, causing a mark to be
+        # placed off trace.
+        self.mlu_common(event)
+        # create mark at current position
+        self.marker = {}
+        self.marker['mtext'] = self.marker_label(event)
+        self.marker['x'] = mx = event.x
+        self.marker['y'] = my = event.y
+        self.marker['colour'] = colour
+        ID_list = []
+        self.place_marker(ID_list, event.x, event.y, colour)
+        self.undo_list.append([self.undo_marker, deepcopy(ID_list)])
+        del ID_list
+        return
+
+    def marker_label(self, event):
+        f = self.convf(int((event.x + self.x2) / self.x1))
+        v = ((self.y1 - event.y) / (self.y2 * self._imm_gain))
+        if self._imm_ipchan != 2:
+            return '{0:02.3f} V\n'.format(v) + f
+        else:
+            # Input Channel 2 (dBm)
+            p = self.volts_dBm(v)
+            return '{0:02.3f} dBm\n'.format(p) + f
+
+    def calibrate(self):
+        msg = 'Please remove any connection\n' + \
+              'from the Channel 2 Input.' + \
+                '\nClick on OK when ready to test.'
+        messagebox.showinfo('Wobbulator Calibration', msg)
+        self.ipchan.set(2)
+        self.ipchan_update()
+        gain = 1
+        self.gain.set(gain)
+        self.gain_update()
+        self.dds.set_wave(0)
+        plotbias = 0.5 * gain
+        VdBm = (plotbias / 25)
+        adj = self.bias_adj(self.compensate(), gain, VdBm)
+        # check error adjustment is within a half dBm
+        if abs(adj) > VdBm / 2:
+            msg = 'Please adjust VR2 for a cyclic sweep reading of -75dBm' + \
+                                        ' with no connection to Channel 2 Input'
+            self.bitres.set(12)
+            self.bitres_update()
+            self.cls.set(0)
+            self.record.set(0)
+            self.record_update()
+            self.memstore.set(0)
+            self.memstore_update()
+            self.colcyc.set(1)
+            self.colour_update()
+            self.autostep.set(1)
+            self.autostep_update()
+            # FIXME:
+            # What frequency range should the calibration be performed over?
+            # As there is not supposed to be any coupling to the input
+            # it should not make any difference, in reality there is!
+            self.fstart.set("0")
+            self.fstop.set("30M")
+            self.freq_update(None)
+            self.cycle_sweep()
+        else:
+            msg = 'Channel 2 Input calibration\n' + \
+                    'is within normal parameters\n' + \
+                    '(error: {0:1.3} dBm).'.format(adj/VdBm)
+        messagebox.showinfo('Wobbulator Calibration', msg)
+        return
+
+    def bias_adj(self, bias, gain, VdBm):
+        # An AD8037 bias offset of 0.5v (avoiding the 0 to 0.5v erroneous
+        # non-linear section) and wobbulator scale minimum of -75dBm
+        # corresponds to 20mV per dBm (with an intercept -100dBm : 0v).
+        # 20mV = (0.5v / (100dBm - 75dBm)).
+        # If the measured bias is offset from the scale bias then
+        # an adjustment is required.
+        # adjustment = measured_bias - scale_bias
+        return ((bias / gain) - (VdBm * 25))
+
+    def volts_dBm(self, volts):
+        """ convert the AD8307 milli-volt representation to dBm """
+        # (volts / volts per dBm) + dBm @ 0v
+        return ((volts / self.VdBm) + (-100))
+
+    def dBm_volts(self, dBm):
+        """ convert dBm to the AD8307 milli-volt representation """
+        return ((dBm - (-100)) * self.VdBm)
+
+    def place_marker(self, marker_list, text_x, text_y, colour):
+        """ Draw trace mark and related text label """
+        # draw text at given x\y co-ordinates
+        mtext = self.marker['mtext']
+        itemID = canvas.create_text(text_x, text_y - 20, anchor = CENTER,
+                                    fill = colour, font = self.text_font,
+                                            text = mtext, tag = 'marker')
+        marker_list.append(itemID)
+        # draw trace mark at original x\y co-ordinates
+        mx = self.marker['x']
+        my = self.marker['y']
+        itemID = canvas.create_line(mx - 3, my - 3, mx + 4, my + 4,
+                                            fill = colour, tag = 'marker')
+        marker_list.append(itemID)
+        itemID = canvas.create_line(mx - 3, my + 3, mx + 4, my - 4,
+                                            fill = colour, tag = 'marker')
+        marker_list.append(itemID)
+        return
+
+    def mrd_red(self, event):
+        """ Mouse Right Button Down on red trace"""
+        self.mrd_common(event, 'red')
+        return
+
+    def mrd_magenta(self, event):
+        """ Mouse Right Button Down on magenta trace"""
+        self.mrd_common(event, 'magenta')
+        return
+
+    def mrd_yellow(self, event):
+        """ Mouse Right Button Down on yellow trace"""
+        self.mrd_common(event, 'yellow')
+        return
+
+    def mrd_green(self, event):
+        """ Mouse Right Button Down """
+        self.mrd_common(event, 'green')
+        return
+
+    def mrd_blue(self, event):
+        """ Mouse Right Button Down """
+        self.mrd_common(event, 'blue')
+        return
+
+    def mlu_common(self, event):
+        """ Mouse Left Button up """
+        canvas.delete('vhtext')
+
+    def mld_common(self, event, colour):
+        """ Mouse Left Button Down """
+        vhstr = self.marker_label(event)
+        canvas.create_text(event.x, event.y - 20, anchor = CENTER, 
+            font = self.text_font, fill = colour, text = vhstr, tag = 'vhtext')
+        canvas.create_line(event.x - 3, event.y - 3,
+                        event.x + 4, event.y + 4, fill = colour, tag = 'vhtext')
+        canvas.create_line(event.x - 3, event.y + 3,
+                        event.x + 4, event.y - 4, fill = colour, tag = 'vhtext')
+        return
+
+    def mld_red(self, event):
+        """ Mouse Left Button Down """
+        self.mld_common(event, 'red')
+        return
+
+    def mld_magenta(self, event):
+        """ Mouse Left Button Down """
+        self.mld_common(event, 'magenta')
+        return
+
+    def mld_yellow(self, event):
+        """ Mouse Left Button Down """
+        self.mld_common(event, 'yellow')
+        return
+
+    def mld_green(self, event):
+        """ Mouse Left Button Down """
+        self.mld_common(event, 'green')
+        return
+
+    def mld_blue(self, event):
+        """ Mouse Left Button Down """
+        self.mld_common(event, 'blue')
         return
 
     # clear the canvas
     def fresh_canvas(self):
         """ reclaim and re-draw canvas area """
-        canvas.delete('plot')
+        for key, val in self._colour_option.items():
+            tag = 'p_' + val
+            canvas.delete(tag)
+        #canvas.delete('plot')
         canvas.delete('marker')
         self.memstore_reset()
         self.label_yscale()
@@ -709,50 +932,50 @@ www.asliceofraspberrypi.co.uk\n\
     def graticule_update(self):
         """ reclaim and re-draw graticule or label border """
         canvas.delete('graticule')
+        ydatum = self.mrgnTop - 1
+        xdatum = self.mrgnLeft
         if self.graticule.get():
             # coarse division vertical lines
-            ystart = self.mrgnTop
-            yend = self.mrgnTop + self.chrtHt
+            yend = ydatum + self.chrtHt
             xstep = int(self.chrtWid / self.xDivs)
-            for x in range(self.mrgnLeft, self.mrgnLeft + self.chrtWid + 1, xstep):
-                canvas.create_line(x, ystart, x, yend, fill = self.canvFg,
+            for x in range(xdatum, xdatum + self.chrtWid + 1, xstep):
+                canvas.create_line(x, ydatum, x, yend, fill = self.canvFg,
                                                             tag = 'graticule')
             # coarse division horizontal lines
-            xstart = self.mrgnLeft
-            xend = self.mrgnLeft + self.chrtWid
+            xend = xdatum + self.chrtWid
             ystep = int(self.chrtHt/self.yDivs)
-            for y in range(self.mrgnTop, self.mrgnTop + self.chrtHt + 1, ystep):
-                canvas.create_line(xstart, y, xend, y, fill = self.canvFg,
+            for y in range(ydatum, ydatum + self.chrtHt + 1, ystep):
+                canvas.create_line(xdatum, y, xend, y, fill = self.canvFg,
                                                             tag = 'graticule')
 
-            # fine divisions along x and y centre lines only
+            # fine divisions along x and y centres only
             # fine division horizontal lines along vertical axis
-            x = self.mrgnLeft + int(self.chrtWid / 2)
-            xstart = x - 4
-            xend = x + 5
+            x = xdatum + int(self.chrtWid / 2)
+            xs = x - 4
+            xe = x + 5
             ystep = int(ystep / 5)
-            for y in range(self.mrgnTop + ystep,
-                                self.mrgnTop + self.chrtHt + 1 - ystep, ystep):
-                canvas.create_line(xstart, y, xend, y, fill = self.canvFg,
+            for y in range(ydatum + ystep,
+                                ydatum + self.chrtHt + 1 - ystep, ystep):
+                canvas.create_line(xs, y, xe, y, fill = self.canvFg,
                                                             tag = 'graticule')
 
             # fine division vertical lines along horizontal axis
-            y = self.mrgnTop + int(self.chrtHt / 2)
-            ystart = y - 4
-            yend = y + 5
+            y = ydatum + int(self.chrtHt / 2)
+            ys = y - 4
+            ye = y + 5
             xstep = int(xstep / 5)
-            for x in range(self.mrgnLeft + xstep,
-                            self.mrgnLeft + self.chrtWid + 1 - xstep, xstep):
-                canvas.create_line(x, ystart, x, yend, fill = self.canvFg,
+            for x in range(xdatum + xstep,
+                                xdatum + self.chrtWid + 1 - xstep, xstep):
+                canvas.create_line(x, ys, x, ye, fill = self.canvFg,
                                                             tag = 'graticule')
         else:
             # border the scale labels
-            canvas.create_line(self.mrgnLeft, self.mrgnTop, self.mrgnLeft,
-                                        self.mrgnTop + self.chrtHt,
+            canvas.create_line(xdatum, ydatum, xdatum,
+                                        ydatum + self.chrtHt,
                                         fill = self.canvFg, tag = 'graticule')
 
-            y = self.chrtHt + self.mrgnTop
-            canvas.create_line(self.mrgnLeft, y, self.mrgnLeft + self.chrtWid,
+            y = ydatum + self.chrtHt
+            canvas.create_line(xdatum, y, xdatum + self.chrtWid,
                                     y, fill = self.canvFg, tag = 'graticule')
         canvas.update_idletasks()
         return
@@ -808,7 +1031,10 @@ www.asliceofraspberrypi.co.uk\n\
         """ memory store state change """
         if not self.memstore.get():
             self.memstore_reset()
-            canvas.delete('plot')
+            for key, val in self._colour_option.items():
+                tag = 'p_' + val
+                canvas.delete(tag)
+            #canvas.delete('plot')
             canvas.delete('marker')
             # reclaiming plot tags may remove wanted trace
             # not reclaiming plot tags may leave unwanted trace
@@ -908,7 +1134,7 @@ www.asliceofraspberrypi.co.uk\n\
             (fn_arg[0])(fn_arg[1])
         return
 
-    def fconv(self,f):
+    def fconv(self, f):
         """
         convert frequency f to Hz and return as int value
         e.g.: 10 MHz, 14.1m, 1k, 3.67 Mhz, 1.2 khz
@@ -924,10 +1150,18 @@ www.asliceofraspberrypi.co.uk\n\
         except ValueError:
             return 0
 
-    # FIXME do this the python way & ditch this 'C' function
-    # close but not quite, sometimes strips off one too many zero's
+    def convf(self, f):
+        if not f % 1000:
+            if not f % 1000000:
+                return '{} MHz'.format(int(f / 1000000))
+            return '{} kHz'.format(int(f / 1000))
+        else:    
+            return '{} Hz'.format(f)
+
+    # FIXME: do this the python way & ditch this 'C' function
+    # Close but not quite, sometimes strips off one too many zero's
     def lblfmt(self, val):
-        lbl = str('{0:02.3f}'.format(val)).rstrip('0')
+        lbl = str('{0:02.4f}'.format(val)).rstrip('0')
         if lbl[len(lbl) - 1] == '.':
             lbl = lbl + '0'
         return lbl
@@ -976,30 +1210,30 @@ www.asliceofraspberrypi.co.uk\n\
         gain = self.gain.get()
         ipchan = self.ipchan.get()
         if ipchan == 2:
-            # Channel 2 (log) is selected
-            startV = float(-75)
-            stopV = float(-25)
-            vN = startV + (50 / gain)
+            # Input Channel 2 (dBm)
+            scale_start = float(-75)
+            scale_range = 50
             vDesc = 'dBm'
         else:
             # Assume linear scale
-            startV = float(0)
-            stopV = float(2.0)
-            vN = stopV / gain
+            scale_start = float(0)
+            scale_range = 2.0
             vDesc = 'Volts'
 
         canvas.delete('vlabel')
 
-        vStep = (vN - startV) / self.yDivs
+        scale_scope = scale_range / gain
+        scale_step = scale_scope / self.yDivs
         xpos = self.mrgnLeft - 25
         ypos = self.mrgnTop
-        while vN > startV:
+        vN = scale_start + scale_scope
+        while vN > scale_start:
             stry = self.lblfmt(vN)
             canvas.create_text( xpos, ypos, fill = self.canvFg,
                                                 text = stry, tag = 'vlabel')
-            vN = vN - vStep
+            vN = vN - scale_step
             ypos = ypos + (self.chrtHt / self.yDivs)
-        stry = self.lblfmt(startV)
+        stry = self.lblfmt(scale_start)
         canvas.create_text(xpos, ypos, fill = self.canvFg,
                                                 text = stry, tag = 'vlabel')
         # write the vertical label
@@ -1062,8 +1296,11 @@ www.asliceofraspberrypi.co.uk\n\
         'real' value for storage and export.
         Keep synchronised with partner function 'load_adapt'.
         """
-        # How do we want to handle input channel two (dBm)
-        return (reading / self._imm_gain)
+        if self._imm_ipchan != 2:
+            return (reading / self._imm_gain)
+        else:
+            # Input Channel 2 (dBm)
+            return self.volts_dBm(reading)
 
     def load_adapt(self, reading):
         """
@@ -1073,7 +1310,11 @@ www.asliceofraspberrypi.co.uk\n\
         'internal' representation for trace plotting.
         Keep synchronised with partner function 'save_adapt'.
         """
-        return (reading * self._imm_gain)
+        if self._imm_ipchan != 2:
+            return (reading * self._imm_gain)
+        else:
+            # Input channel two (dBm)
+            return self.dBm_volts(reading)
 
     def trace_save_header(self):
         """ Construct trace sweep save header """
@@ -1093,21 +1334,15 @@ www.asliceofraspberrypi.co.uk\n\
 
     def compensate(self):
         # compensate for errors in first readings related to a
-        # significant frequency jump and low bit resolution by
-        # throwing away until value read repeats.
-        v = self.adc.read()
-        u = self.adc.read()
-        # limit the maximum number of loops
-        for n in range(25):
-            w = self.adc.read()
-            if v == u and u == w:
-                # three consecutive identical readings
-                break
-            v = u
-            u = w
-            #print("{} ".format(v), end="")
-        #print("{}:{}".format(n, v))
-        return
+        # significant change in frequency and\or low bit resolution
+        v = 0.0
+        #print("compensate:")
+        for n in range(1, 5):
+            v += self.adc.read()
+            #print(" {}".format(v / n), end = '')
+        v = v / n
+        #print("Compensate:{0:2.6}".format(v))
+        return v
 
     def trace_init(self, trace_header, trace_list):
         """ perform trace sweep from memory """
@@ -1224,15 +1459,20 @@ www.asliceofraspberrypi.co.uk\n\
 
         # scale and bias are dependant on input channel
         if ipchan == 2:
+            # FIXME: fix input gain at 1 ???
             # set wave to 0 Hz
             self.dds.set_wave(0)
-            # compensate for errors in first readings
-            self.compensate()
-            # calculate bias from input when no frequency being output
-            self.plotbias = ((self.adc.read() + self.adc.read()) / 2)
-            self.plotscale = 1
-            if self.plotbias > 2.0:
+            # calculate bias compensating for errors in first readings
+            # from input with no wave on output.
+            bias = self.compensate()
+            if bias > 2.0:
                 self.invalid_sweep('The input voltage\gain is out of range')
+                return
+            self.plotbias = 0.5 * gain
+            self.VdBm = (self.plotbias / 25)
+            #print("Offset Bias:{0:2.6}".format(self.plotbias))
+            #print("Volts per dBm:{0:2.6}".format(self.VdBm))
+            self.plotscale = 1
         else:
             self.plotbias = 0
             self.plotscale = 2
@@ -1270,10 +1510,9 @@ www.asliceofraspberrypi.co.uk\n\
 
         # program the DDS to output the required frequency
         self.dds.set_wave(startfreq)
-        # compensate for errors in first readings
-        self.compensate()
         # take voltage reading
-        self.reading = self.adc.read()
+        # compensate for errors in first readings
+        self.reading = self.compensate()
 
         # for y-coordinate start point
         self.ystart = self.y1 - (self.reading * self.y2)
@@ -1344,8 +1583,9 @@ www.asliceofraspberrypi.co.uk\n\
                 # plot the trace line
                 if (self.ystart > self.mrgnTop) or (yend > self.mrgnTop):
                     # both ends are in range, one may have been clamped
+                    tag_colour = 'p_' + self._imm_colour
                     lineID = canvas.create_line(self.xstart, self.ystart,
-                        xend, yend, fill = self._imm_colour, tag = 'plot')
+                        xend, yend, fill = self._imm_colour, tag = tag_colour)
 
                     # record the trace handle for later individual removal
                     self.line_buffer.update({frequency : lineID})
@@ -1375,7 +1615,7 @@ www.asliceofraspberrypi.co.uk\n\
             # Save data as a list of 'plot sets'
             self.trace_list.append(deepcopy(self.trace_data))
 
-        self.undo_list.append([self.undo_trace, 'plot'])
+        self.undo_list.append([self.undo_trace, ''])
         self.line_list.append(deepcopy(self.line_buffer))
 
         self.b_undo.config(state = NORMAL)
@@ -1532,65 +1772,16 @@ www.asliceofraspberrypi.co.uk\n\
             messagebox.showerror('Invalid Settings', 'The chosen parameters are invalid')
         return
 
-    def mouse_leftdown(self, event):
-        """ display mousepointer volts\hertz text """
-        # calculate frequency from the x co-ordinate
-        # x2 = ((chrtWid * (startfreq / span)) - mrgnLeft)
-        # x1 = (chrtWid / span)
-        # x = int((x1 * frequency) - x2)
-        # frequency = (x + x2) / x1
-        f = int((event.x + self.x2) / self.x1)
-        # calculate voltage reading from the y co-ordinate
-        # self.y2 = (self.chrtHt / plotscale)
-        # self.y1 = (self.chrtHt + self.mrgnTop + (plotbias * self.y2))
-        # y = int(self.y1 - (reading * self.y2))
-        # voltage = (y1 - y) / y2
-        v = ((self.y1 - event.y) / self.y2) / self._imm_gain
-        #vhstr = 'Volts:{}\nHertz:{}'.format(v, f)
-        vhstr = '{} V\n{} Hz'.format(v, f)
-        # FIXME: automate font colour to contrast canvBg
-        canvas.create_text(event.x, event.y - 20, anchor = CENTER,
-                                    fill = 'white', font = self.text_font,
-                                            text = vhstr, tag = 'vhtext')
-        return
-
-    def mouse_leftup(self, event):
-        """ remove mousepointer volts\hertz text """
-        canvas.delete('vhtext')
-        return
+    def undo_marker(self, markerIDs):
+        while len(markerIDs):
+            marker = markerIDs.pop()
+            canvas.delete(marker)
 
     def colour_iterate(self):
         """ generator for colour options """
         for key, colour in self._colour_option.items():
             self._colour_cycle = colour
             yield key
-
-    def mouse_rightdown(self, event):
-        f = int((event.x + self.x2) / self.x1)
-        v = ((self.y1 - event.y) / self.y2) / self._imm_gain
-        #vhstr = 'Volts:{}\nHertz:{}'.format(v, f)
-        vhstr = '{} V\n{} Hz'.format(v, f)
-        ID_list = []
-        itemID = canvas.create_text(event.x, event.y - 20, anchor = CENTER,
-                                    fill = 'white', font = self.text_font,
-                                            text = vhstr, tag = 'marker')
-        ID_list.append(itemID)
-        itemID = canvas.create_line(event.x - 3, event.y - 3,
-                    event.x + 4, event.y + 4, fill = 'white', tag = 'marker')
-        ID_list.append(itemID)
-        itemID = canvas.create_line(event.x - 3, event.y + 3,
-                    event.x + 4, event.y - 4, fill = 'white', tag = 'marker')
-        ID_list.append(itemID)
-        self.undo_list.append([self.undo_marker, deepcopy(ID_list)])
-        return
-
-    def undo_marker(self, markerIDs):
-        while len(markerIDs):
-            marker = markerIDs.pop()
-            canvas.delete(marker)
-
-    def mouse_rightup(self, event):
-        pass
 
     def colour_cycle(self):
         """ Return the next key in the colour cycle. """

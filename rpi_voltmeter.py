@@ -1,5 +1,6 @@
 #!/usr/bin/python3
-# vim:ai:sw=4:ts=8:et:fileencoding=ascii
+# -*- coding: utf-8 -*-
+# vim:ai:sw=4:ts=8:et:fileencoding=utf-8
 #
 # RPi VoltMeter v1.0
 #

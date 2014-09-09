@@ -1,5 +1,7 @@
+#!/usr/bin/python3
 # RPiWobbulator Lock Module
-# vim:ai:sw=4:ts=8:et:fileencoding=ascii
+# -*- coding: utf-8 -*-
+# vim:ai:sw=4:ts=8:et:fileencoding=utf-8
 #
 # Copyright (C) 2014 Gray Remlin
 #
