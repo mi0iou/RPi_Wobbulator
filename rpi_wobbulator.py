@@ -186,7 +186,6 @@ class WobbyPi():
         frame = Frame(master, bd=10)
         frame.pack(fill=BOTH,expand=1)
 
-        # setup working parameters
         # system values
         self.mrgnLeft = 56
         self.mrgnRight = 20
@@ -203,6 +202,44 @@ class WobbyPi():
         self.fBegin = params['fBegin']
         self.fEnd = params['fEnd']
         self.fIntvl = params['fIntvl']
+
+        # setup working parameters
+
+        # The Wobbulator AD8307 LogAmp has a dynamic range of -75 dBm to
+        # +16 dBm giving a range of 92dBm, with an intercept of -84 dBm.
+        # That is, -74 dBm yields an output of 1 unit mV per dBm
+        # (so -75 dBm = 0v).
+        self.dBm_offset = -75
+
+        # The Wobbulator AD8307 LogAmp is non-linear for outputs below 0.5V.
+        # The Wobbulator AD8307 LogAmp has no power supply decoupling, no
+        # output decoupling, no screening, and no input filtering. The result
+        # is a very high noise floor, limiting the useful minimum input.
+        self.dBm_bias = 0.5
+
+        # The Wobbulator AD8307 LogAmp has a 50 Ohm 0805 SMD across the
+        # input which can handle an estimated input of 0.1W, which is a
+        # maximum input of 20 dBm.
+
+        # The Wobbulator provides a 3.3V supply to the AD8307 LogAmp.
+        # With an unbalanced input the largest signal that can be
+        # handled by the AD8307 LogAmp when operating from a 3 V supply
+        # is 10 dBm (sine amplitude of ±1 V).
+        # 16 dBm could have been handled using a 5 V supply.
+
+        # The Wobbulator AD8307 LogAmp output directly drives the
+        # MCP3424 ADC which has an input voltage ceiling of 2.0V.
+
+        # The Wobbulator AD8307 LogAmp 'Volts per dBm' are calibrated
+        # by adjusting VR2, the approxmate range is from 11mV to 22mV.
+        self.VdBm = 0.02
+
+        self.dBm_start = self.volts_dBm(self.dBm_bias)
+        self.dBm_end = 0
+        self.dBm_range = abs(self.dBm_start) + self.dBm_end
+
+        # 50dBm @ 0.02mV
+        self.dBm_scale = 1
 
         # setup canvas to display results
         global canvas
@@ -226,7 +263,7 @@ class WobbyPi():
             if int(params['vchan']) == ipchan:
                 rb.select()
             if not _has_wobbulator:
-                rb.configure(state='disabled')
+                rb.configure(state = 'disabled')
 
         # Input gain
         fr_gain = LabelFrame(frame, text = 'Gain', labelanchor = 'n')
@@ -242,7 +279,7 @@ class WobbyPi():
             if int(params['vgain']) == gain:
                 rb.select()
             if not _has_wobbulator:
-                rb.configure(state='disabled')
+                rb.configure(state = 'disabled')
 
         # Bit resolution 18Bit, 16Bit, 14Bit, 12Bit
         fr_bitres = LabelFrame(frame, text = 'BPS', labelanchor = 'n')
@@ -258,7 +295,7 @@ class WobbyPi():
             if int(params['bits']) == bitres:
                 rb.select()
             if not _has_wobbulator:
-                rb.configure(state='disabled')
+                rb.configure(state = 'disabled')
 
         # Colour of trace
         fr_colour = LabelFrame(frame, text = 'Colour', labelanchor = 'n')
@@ -384,7 +421,7 @@ class WobbyPi():
         # Button to reset settings
         self.b_reset = Button(fr_control, text = 'Reset', height = 1, width = 3,
                                                     activeforeground = 'red',
-                                                        command = self.reset_sweep)
+                                                    command = self.reset_sweep)
         # Button to start a single sweep
         self.b_sweep = Button(fr_control, text = 'Sweep', height = 1, width = 3,
                                                     activeforeground='red',
@@ -410,17 +447,29 @@ class WobbyPi():
         self.b_save.grid(row = 0, column = 4)
 
         if not _has_wobbulator:
-            self.b_action.configure(state='disabled')
-            self.b_sweep.configure(state='disabled')
-            self.b_reset.configure(state='disabled')
-            self.e_stepf.configure(state='disabled')
-            e_stopf.configure(state='disabled')
-            e_startf.configure(state='disabled')
-            cb_autostep.configure(state='disabled')
+            self.b_action.configure(state = 'disabled')
+            self.b_sweep.configure(state = 'disabled')
+            self.b_reset.configure(state = 'disabled')
+            self.e_stepf.configure(state = 'disabled')
+            e_stopf.configure(state = 'disabled')
+            e_startf.configure(state = 'disabled')
+            cb_autostep.configure(state = 'disabled')
 
         canvas.update_idletasks()
-        self._colour_mld_bind = {0:self.mld_red, 1:self.mld_magenta, 2:self.mld_yellow, 3:self.mld_green, 4:self.mld_blue}
-        self._colour_mrd_bind = {0:self.mrd_red, 1:self.mrd_magenta, 2:self.mrd_yellow, 3:self.mrd_green, 4:self.mrd_blue}
+        self._colour_mld_bind = {0:self.mld_red, 1:self.mld_magenta,
+                        2:self.mld_yellow, 3:self.mld_green, 4:self.mld_blue}
+        self._colour_mrd_bind = {0:self.mrd_red, 1:self.mrd_magenta,
+                        2:self.mrd_yellow, 3:self.mrd_green, 4:self.mrd_blue}
+
+    def roundup(self, dividend, divisor):
+        if dividend % divisor != 0:
+            dividend += divisor - dividend % divisor
+        return dividend
+
+    def gcd(self, x, y):
+        while y:
+            x, y = y, x % y
+        return x
 
     def makemenu(self, win):
         global root
@@ -465,10 +514,10 @@ class WobbyPi():
                                                                 underline = 0)
         help.add_command(label = 'About Wobbulator', command = self.showAbout,
                                                                 underline = 0)
-        m_file.entryconfig(1, state=DISABLED)
-        m_file.entryconfig(2, state=DISABLED)
+        m_file.entryconfig(1, state = DISABLED)
+        m_file.entryconfig(2, state = DISABLED)
         if not _has_wobbulator:
-            opt.entryconfig(8, state=DISABLED)
+            opt.entryconfig(8, state = DISABLED)
 
     def not_done(self):
         messagebox.showerror('Not implemented', 'Not yet available')
@@ -488,7 +537,7 @@ class WobbyPi():
 \nOptions:\n\
 [Gr]  - Graticule display\n\
 [Cls] - Clear display at sweep start\n\
-[Rec] - Record sweeps for saving\n\
+[Rec] - Record sweep trace data\n\
 [MS]  - Memory Store display\n\
 [AS]  - Auto-Step completion\n\
 [CC]  - Colour Cycle after sweep\n\
@@ -598,8 +647,8 @@ www.asliceofraspberrypi.co.uk\n\
     def file_load(self):
         ttl = 'Load Wobbulator Trace File'
         ft = (("Wobbulator Trace Files", "*.wtf"),("All files", "*.*"))
-        filename = filedialog.askopenfilename(defaultextension='.wtf',
-                                                    title=ttl, filetypes=ft)
+        filename = filedialog.askopenfilename(defaultextension = '.wtf',
+                                                title = ttl, filetypes = ft)
         if filename:
             fname, fext = os.path.splitext(filename)
             if fext.upper() == '.WTF':
@@ -619,7 +668,8 @@ www.asliceofraspberrypi.co.uk\n\
                 self.trace_init(trace_header, trace_list)
             else:
                 messagebox.showerror('Bad file extension',
-                'Only WTF file format is supported\nPlease specify ".wtf" file suffix')
+                                    'Only WTF file format is supported\n' + 
+                                    'Please specify a ".wtf" suffixed file')
         return
 
     def file_save(self):
@@ -627,8 +677,8 @@ www.asliceofraspberrypi.co.uk\n\
         if len(self.trace_list):
             ttl = 'Save Wobbulator Trace File'
             ft = (("Wobbulator Trace Files", "*.wtf"),("All files", "*.*"))
-            filename = filedialog.asksaveasfilename(defaultextension='.wtf',
-                                                        title=ttl, filetypes=ft)
+            filename = filedialog.asksaveasfilename(defaultextension = '.wtf',
+                                                title = ttl, filetypes = ft)
             if filename:
                 fname, fext = os.path.splitext(filename)
                 if fext.upper() == '.WTF':
@@ -638,11 +688,13 @@ www.asliceofraspberrypi.co.uk\n\
                             pickle.dump(self.trace_header, dataFile)
                             pickle.dump(self.trace_list, dataFile)
                         except pickle.PicklingError:
-                            messagebox.showerror('File Error', 'File is corrupt!')
+                            messagebox.showerror('File Error',
+                                                        'File is corrupt!')
                             return
                 else:
                     messagebox.showerror('Bad file extension',
-                    'Only WTF file format is supported\nPlease specify ".wtf" file suffix')
+                                    'Only WTF file format is supported\n' +
+                                        'Please specify ".wtf" file suffix')
         else:
             messagebox.showerror('No recorded data',
                     'Record data before attempting save')
@@ -653,8 +705,8 @@ www.asliceofraspberrypi.co.uk\n\
         if len(self.trace_list):
             ttl = 'Export Wobbulator Trace File'
             ft = (("Comma Seperated Values", "*.csv"),("All files", "*.*"))
-            filename = filedialog.asksaveasfilename(defaultextension='.csv',
-                                                    title=ttl, filetypes=ft)
+            filename = filedialog.asksaveasfilename(defaultextension = '.csv',
+                                                    title = ttl, filetypes = ft)
             if filename:
                 fname, fext = os.path.splitext(filename)
                 if fext.upper() == ".CSV":
@@ -666,7 +718,8 @@ www.asliceofraspberrypi.co.uk\n\
                         w.writerows(self.trace_list)
                 else:
                     messagebox.showerror('Bad file extension',
-                'Only CSV file export is supported\nPlease specify ".csv" file suffix')
+                                    'Only CSV file export is supported\n' +
+                                        'Please specify ".csv" file suffix')
         else:
             messagebox.showerror('No recorded data',
                     'Record data before attempting export')
@@ -760,7 +813,7 @@ www.asliceofraspberrypi.co.uk\n\
         else:
             # Input Channel 2 (dBm)
             p = self.volts_dBm(v)
-            return '{0:02.3f} dBm\n'.format(p) + f
+            return '{0:02.1f} dBm\n{1:02.3f} V\n'.format(p, v) + f
 
     def calibrate(self):
         msg = 'Please remove any connection\n' + \
@@ -773,13 +826,14 @@ www.asliceofraspberrypi.co.uk\n\
         self.gain.set(gain)
         self.gain_update()
         self.dds.set_wave(0)
-        plotbias = 0.5 * gain
-        VdBm = (plotbias / 25)
-        adj = self.bias_adj(self.compensate(), gain, VdBm)
+
+        plotbias = self.dBm_bias * gain
+
+        adj = self.bias_adj(self.compensate(), gain)
         # check error adjustment is within a half dBm
-        if abs(adj) > VdBm / 2:
-            msg = 'Please adjust VR2 for a cyclic sweep reading of -75dBm' + \
-                                        ' with no connection to Channel 2 Input'
+        if abs(adj) > self.VdBm / 2:
+            msg = 'Please adjust VR2 for a cyclic sweep reading of ' + \
+                '{} dBm with Channel 2 Input disconnected'.format(self.dBm_start)
             self.bitres.set(12)
             self.bitres_update()
             self.cls.set(0)
@@ -802,28 +856,23 @@ www.asliceofraspberrypi.co.uk\n\
         else:
             msg = 'Channel 2 Input calibration\n' + \
                     'is within normal parameters\n' + \
-                    '(error: {0:1.3} dBm).'.format(adj/VdBm)
+                    '(error: {0:1.3} dBm).'.format(adj / self.VdBm)
         messagebox.showinfo('Wobbulator Calibration', msg)
         return
 
-    def bias_adj(self, bias, gain, VdBm):
-        # An AD8037 bias offset of 0.5v (avoiding the 0 to 0.5v erroneous
-        # non-linear section) and wobbulator scale minimum of -75dBm
-        # corresponds to 20mV per dBm (with an intercept -100dBm : 0v).
-        # 20mV = (0.5v / (100dBm - 75dBm)).
-        # If the measured bias is offset from the scale bias then
-        # an adjustment is required.
+    def bias_adj(self, measured_bias, gain):
         # adjustment = measured_bias - scale_bias
-        return ((bias / gain) - (VdBm * 25))
+        return ((measured_bias / gain) - (self.VdBm
+                            * abs(self.dBm_offset - self.dBm_start)))
 
     def volts_dBm(self, volts):
         """ convert the AD8307 milli-volt representation to dBm """
         # (volts / volts per dBm) + dBm @ 0v
-        return ((volts / self.VdBm) + (-100))
+        return ((volts / self.VdBm) + self.dBm_offset)
 
     def dBm_volts(self, dBm):
         """ convert dBm to the AD8307 milli-volt representation """
-        return ((dBm - (-100)) * self.VdBm)
+        return ((dBm - self.dBm_offset) * self.VdBm)
 
     def place_marker(self, marker_list, text_x, text_y, colour):
         """ Draw trace mark and related text label """
@@ -1211,8 +1260,8 @@ www.asliceofraspberrypi.co.uk\n\
         ipchan = self.ipchan.get()
         if ipchan == 2:
             # Input Channel 2 (dBm)
-            scale_start = float(-75)
-            scale_range = 50
+            scale_start = self.dBm_start
+            scale_range = self.dBm_range
             vDesc = 'dBm'
         else:
             # Assume linear scale
@@ -1468,11 +1517,8 @@ www.asliceofraspberrypi.co.uk\n\
             if bias > 2.0:
                 self.invalid_sweep('The input voltage\gain is out of range')
                 return
-            self.plotbias = 0.5 * gain
-            self.VdBm = (self.plotbias / 25)
-            #print("Offset Bias:{0:2.6}".format(self.plotbias))
-            #print("Volts per dBm:{0:2.6}".format(self.VdBm))
-            self.plotscale = 1
+            self.plotbias = self.dBm_bias * gain
+            self.plotscale = self.dBm_scale
         else:
             self.plotbias = 0
             self.plotscale = 2
@@ -1769,7 +1815,8 @@ www.asliceofraspberrypi.co.uk\n\
         if msg:
             messagebox.showerror('Invalid Settings', msg)
         else:
-            messagebox.showerror('Invalid Settings', 'The chosen parameters are invalid')
+            messagebox.showerror('Invalid Settings',
+                                        'The chosen parameters are invalid')
         return
 
     def undo_marker(self, markerIDs):
