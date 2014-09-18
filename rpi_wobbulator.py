@@ -517,7 +517,7 @@ class WobbyPi():
         m_file.entryconfig(1, state = DISABLED)
         m_file.entryconfig(2, state = DISABLED)
         if not _has_wobbulator:
-            opt.entryconfig(8, state = DISABLED)
+            opt.entryconfig(9, state = DISABLED)
 
     def not_done(self):
         messagebox.showerror('Not implemented', 'Not yet available')
