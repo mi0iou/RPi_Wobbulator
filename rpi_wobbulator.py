@@ -211,6 +211,12 @@ class WobbyPi():
         # (so -75 dBm = 0v).
         self.dBm_offset = -75
 
+        # The Wobbulator provides a 3.3V supply to the AD8307 LogAmp.
+        # This limits the AD8307 LogAmp maximum output to approx 2.0v.
+        # The Wobbulator AD8307 LogAmp output directly drives the
+        # MCP3424 ADC which has an input voltage ceiling of 2.0V.
+        # The following parameters combined are dependant on this limit.
+
         # The Wobbulator AD8307 LogAmp is non-linear for outputs below 0.5V.
         # The Wobbulator AD8307 LogAmp has no power supply decoupling, no
         # output decoupling, no screening, and no input filtering. The result
@@ -226,9 +232,6 @@ class WobbyPi():
         # handled by the AD8307 LogAmp when operating from a 3 V supply
         # is 10 dBm (sine amplitude of ±1 V).
         # 16 dBm could have been handled using a 5 V supply.
-
-        # The Wobbulator AD8307 LogAmp output directly drives the
-        # MCP3424 ADC which has an input voltage ceiling of 2.0V.
 
         # The Wobbulator AD8307 LogAmp 'Volts per dBm' are calibrated
         # by adjusting VR2, the approxmate range is from 11mV to 22mV.
@@ -467,6 +470,7 @@ class WobbyPi():
         return dividend
 
     def gcd(self, x, y):
+        """ Euclidean Algorithm to find the greatest common divisor """
         while y:
             x, y = y, x % y
         return x
@@ -977,12 +981,12 @@ www.asliceofraspberrypi.co.uk\n\
         self.trace_list_reset()
         return
 
-    # display graticule
     def graticule_update(self):
         """ reclaim and re-draw graticule or label border """
         canvas.delete('graticule')
         ydatum = self.mrgnTop - 1
         xdatum = self.mrgnLeft
+        # FIXME: this algorithm does not scale
         if self.graticule.get():
             # coarse division vertical lines
             yend = ydatum + self.chrtHt
@@ -1002,6 +1006,7 @@ www.asliceofraspberrypi.co.uk\n\
             x = xdatum + int(self.chrtWid / 2)
             xs = x - 4
             xe = x + 5
+            # FIXME: five divisions is not always suitable
             ystep = int(ystep / 5)
             for y in range(ydatum + ystep,
                                 ydatum + self.chrtHt + 1 - ystep, ystep):
