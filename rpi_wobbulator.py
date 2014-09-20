@@ -215,7 +215,7 @@ class WobbyPi():
         # The Wobbulator AD8307 LogAmp has no power supply decoupling, no
         # output decoupling, no screening, and no input filtering. The result
         # is a very high noise floor, limiting the useful minimum input.
-        self.dBm_bias = 0.5
+        self.VdBm_bias = 0.5
 
         # The Wobbulator AD8307 LogAmp has a 50 Ohm 0805 SMD across the
         # input which can handle an estimated input of 0.1W, which is a
@@ -827,7 +827,7 @@ www.asliceofraspberrypi.co.uk\n\
         self.gain_update()
         self.dds.set_wave(0)
 
-        plotbias = self.dBm_bias * gain
+        plotbias = self.VdBm_bias * gain
 
         adj = self.bias_adj(self.compensate(), gain)
         # check error adjustment is within a half dBm
@@ -1517,7 +1517,7 @@ www.asliceofraspberrypi.co.uk\n\
             if bias > 2.0:
                 self.invalid_sweep('The input voltage\gain is out of range')
                 return
-            self.plotbias = self.dBm_bias * gain
+            self.plotbias = self.VdBm_bias * gain
             self.plotscale = self.dBm_scale
         else:
             self.plotbias = 0
