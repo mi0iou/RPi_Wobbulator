@@ -80,7 +80,7 @@ def default_parameters():
     params['xDivs'] = 10
     params['yDivs'] = 10
     params['canvFg'] = 'black'
-    params['canvBg'] = '#008484'
+    params['canvBg'] = '#00a4a4'
     params['fBegin'] = 0
     params['fEnd'] = 30000000
     params['fIntvl'] = 60000
@@ -206,22 +206,26 @@ class WobbyPi():
         # setup working parameters
 
         # The Wobbulator AD8307 LogAmp has a dynamic range of -75 dBm to
-        # +16 dBm giving a range of 92dBm, with an intercept of -84 dBm.
-        # That is, -74 dBm yields an output of 1 unit mV per dBm
-        # (so -75 dBm = 0v).
+        # +16 dBm giving a range of +92dBm, with an intercept of -84 dBm.
+        # So -75 dBm = 0v.
         self.dBm_offset = -75
+
+        # The following parameter values are inter-dependant on each other
+        # and on the fixed offset value.
 
         # The Wobbulator provides a 3.3V supply to the AD8307 LogAmp.
         # This limits the AD8307 LogAmp maximum output to approx 2.0v.
         # The Wobbulator AD8307 LogAmp output directly drives the
         # MCP3424 ADC which has an input voltage ceiling of 2.0V.
-        # The following parameters combined are dependant on this limit.
 
         # The Wobbulator AD8307 LogAmp is non-linear for outputs below 0.5V.
         # The Wobbulator AD8307 LogAmp has no power supply decoupling, no
         # output decoupling, no screening, and no input filtering. The result
         # is a very high noise floor, limiting the useful minimum input.
-        self.VdBm_bias = 0.5
+        # This noise level can exceed -50 dBm.
+        # Select a bias value for a -45 dBm start.
+        # VdBm_bias = abs(dBm_start - dBm_offset) * VdBm
+        self.VdBm_bias = 0.6
 
         # The Wobbulator AD8307 LogAmp has a 50 Ohm 0805 SMD across the
         # input which can handle an estimated input of 0.1W, which is a
@@ -232,17 +236,22 @@ class WobbyPi():
         # handled by the AD8307 LogAmp when operating from a 3 V supply
         # is 10 dBm (sine amplitude of ±1 V).
         # 16 dBm could have been handled using a 5 V supply.
+        # The Wobbulator AD9850 DDS Module has a maximum output of
+        # approximately -8 dBm.
+        dBm_end = 5
 
         # The Wobbulator AD8307 LogAmp 'Volts per dBm' are calibrated
         # by adjusting VR2, the approxmate range is from 11mV to 22mV.
         self.VdBm = 0.02
 
-        self.dBm_start = self.volts_dBm(self.dBm_bias)
-        self.dBm_end = 0
-        self.dBm_range = abs(self.dBm_start) + self.dBm_end
+        #self.VdBm_bias = abs(self.dBm_start - self.dBm_offset) * self.VdBm
 
-        # 50dBm @ 0.02mV
-        self.dBm_scale = 1
+        self.dBm_start = round(self.volts_dBm(self.VdBm_bias), 6)
+        self.dBm_range = abs(self.dBm_start - dBm_end)
+        # Simplify:  dBm_scale = dBm_range / (1 / VdBm)
+        self.dBm_scale = self.dBm_range * self.VdBm
+
+        self.dBm_validate()
 
         # setup canvas to display results
         global canvas
@@ -464,6 +473,28 @@ class WobbyPi():
         self._colour_mrd_bind = {0:self.mrd_red, 1:self.mrd_magenta,
                         2:self.mrd_yellow, 3:self.mrd_green, 4:self.mrd_blue}
 
+    def dBm_validate(self):
+        # FIXME: finish me
+        msg = ""
+        if self.VdBm <= 0.01 or self.VdBm >= 0.023:
+            msg = 'ERROR: Out of range (VdBm {})'.format(self.VdBm)
+        if self.dBm_start < -65:
+            msg += 'ERROR: Out of range (dBm_start {})'.format(self.dBm_start)
+        if self.dBm_start + self.dBm_range > 10:
+            msg += 'ERROR: Out of range (dBm_start {}, dBm_range {})'.format(
+                                                self.dBm_start, self.dBm_range)
+        if self.VdBm_bias <= 0.2:
+            msg = 'ERROR: Out of range (VdBm_bias {})'.format(self.VdBm_bias)
+        if self.dBm_offset != -75:
+            msg = 'ERROR: Out of range (dBm_offset {})'.format(self.dBm_offset)
+        if msg:
+            print(msg)
+            sys.exit()
+
+        #msg = 'VdBm {}, dBm_scale {}, dBm_start {}, dBm_range {}'.format(
+        #            self.VdBm, self.dBm_scale, self.dBm_start, self.dBm_range)
+        #print(msg)
+
     def roundup(self, dividend, divisor):
         if dividend % divisor != 0:
             dividend += divisor - dividend % divisor
@@ -522,6 +553,8 @@ class WobbyPi():
         m_file.entryconfig(2, state = DISABLED)
         if not _has_wobbulator:
             opt.entryconfig(9, state = DISABLED)
+        # It doesn't work, disable for now
+        opt.entryconfig(9, state = DISABLED)
 
     def not_done(self):
         messagebox.showerror('Not implemented', 'Not yet available')
@@ -820,6 +853,8 @@ www.asliceofraspberrypi.co.uk\n\
             return '{0:02.1f} dBm\n{1:02.3f} V\n'.format(p, v) + f
 
     def calibrate(self):
+        msg = 'This calibration method is invalid\nPlease ignore and calibrate manually'
+        messagebox.showinfo('Wobbulator Calibration', msg)
         msg = 'Please remove any connection\n' + \
               'from the Channel 2 Input.' + \
                 '\nClick on OK when ready to test.'
@@ -849,6 +884,7 @@ www.asliceofraspberrypi.co.uk\n\
             self.colour_update()
             self.autostep.set(1)
             self.autostep_update()
+            self.reset_sweep()
             # FIXME:
             # What frequency range should the calibration be performed over?
             # As there is not supposed to be any coupling to the input
@@ -867,7 +903,7 @@ www.asliceofraspberrypi.co.uk\n\
     def bias_adj(self, measured_bias, gain):
         # adjustment = measured_bias - scale_bias
         return ((measured_bias / gain) - (self.VdBm
-                            * abs(self.dBm_offset - self.dBm_start)))
+                            * abs(self.dBm_start - self.dBm_offset)))
 
     def volts_dBm(self, volts):
         """ convert the AD8307 milli-volt representation to dBm """
@@ -988,17 +1024,20 @@ www.asliceofraspberrypi.co.uk\n\
         xdatum = self.mrgnLeft
         # FIXME: this algorithm does not scale
         if self.graticule.get():
-            # coarse division vertical lines
-            yend = ydatum + self.chrtHt
-            xstep = int(self.chrtWid / self.xDivs)
-            for x in range(xdatum, xdatum + self.chrtWid + 1, xstep):
-                canvas.create_line(x, ydatum, x, yend, fill = self.canvFg,
-                                                            tag = 'graticule')
+
             # coarse division horizontal lines
             xend = xdatum + self.chrtWid
             ystep = int(self.chrtHt/self.yDivs)
             for y in range(ydatum, ydatum + self.chrtHt + 1, ystep):
                 canvas.create_line(xdatum, y, xend, y, fill = self.canvFg,
+                                                            tag = 'graticule')
+
+            # coarse division vertical lines
+            #yend = ydatum + self.chrtHt
+            yend = y
+            xstep = int(self.chrtWid / self.xDivs)
+            for x in range(xdatum, xdatum + self.chrtWid + 1, xstep):
+                canvas.create_line(x, ydatum, x, yend, fill = self.canvFg,
                                                             tag = 'graticule')
 
             # fine divisions along x and y centres only
@@ -1024,13 +1063,12 @@ www.asliceofraspberrypi.co.uk\n\
                                                             tag = 'graticule')
         else:
             # border the scale labels
-            canvas.create_line(xdatum, ydatum, xdatum,
-                                        ydatum + self.chrtHt,
+            y = ydatum + self.chrtHt
+            canvas.create_line(xdatum, ydatum, xdatum, y,
                                         fill = self.canvFg, tag = 'graticule')
 
-            y = ydatum + self.chrtHt
-            canvas.create_line(xdatum, y, xdatum + self.chrtWid,
-                                    y, fill = self.canvFg, tag = 'graticule')
+            canvas.create_line(xdatum, y, xdatum + self.chrtWid, y,
+                                        fill = self.canvFg, tag = 'graticule')
         canvas.update_idletasks()
         return
 
