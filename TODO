@@ -12,6 +12,7 @@ DONE: Add 'fileencoding=ascii' to the vim editor (2nd) line to comply with PEP-0
 RPi_Wobbulator
 ~~~~~~~~~~~~~~
 
+save marker & associated text in wtf file
 Add keybindings for keyboard menu operation
 Format Help & About messagebox text
 
