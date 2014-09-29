@@ -129,8 +129,8 @@ from tkinter import simpledialog
 # Class definition for WobbyPi application
 class WobbyPi():
 
-    trace_header = {}
-    trace_data = {}
+    trace_state = {}
+    trace_set = {}
     trace_list = []
 
     line_buffer = {}
@@ -692,7 +692,7 @@ www.asliceofraspberrypi.co.uk\n\
                 # wobbulator trace file
                 with open(filename, "rb") as dataFile:
                     try:
-                        trace_header = pickle.load(dataFile)
+                        trace_state = pickle.load(dataFile)
                         trace_list = pickle.load(dataFile)
                     except EOFError:
                         messagebox.showerror('File Error',
@@ -702,7 +702,7 @@ www.asliceofraspberrypi.co.uk\n\
                         messagebox.showerror('File Error',
                                     'File "{}" is corrupt!'.format(filename))
                         return
-                self.trace_init(trace_header, trace_list)
+                self.trace_init(trace_state, trace_list)
             else:
                 messagebox.showerror('Bad file extension',
                                     'Only WTF file format is supported\n' + 
@@ -722,7 +722,7 @@ www.asliceofraspberrypi.co.uk\n\
                     # wobbulator trace file
                     with open(filename, 'wb') as dataFile:
                         try:
-                            pickle.dump(self.trace_header, dataFile)
+                            pickle.dump(self.trace_state, dataFile)
                             pickle.dump(self.trace_list, dataFile)
                         except pickle.PicklingError:
                             messagebox.showerror('File Error',
@@ -1146,7 +1146,7 @@ www.asliceofraspberrypi.co.uk\n\
                                         text = self.desc.get(), tag = 'desc')
         # update the description in the trace header to
         # allow defining\changing it *after* sweep recording
-        self.trace_header.update({'Desc' : self.desc.get()})
+        self.trace_state.update({'Desc' : self.desc.get()})
         return
 
     def freq_update(self, event):
@@ -1408,20 +1408,20 @@ www.asliceofraspberrypi.co.uk\n\
             # Input channel two (dBm)
             return self.dBm_volts(reading)
 
-    def trace_save_header(self):
+    def trace_state_save(self):
         """ Construct trace sweep save header """
         # Need to handle the case of multiple traces
-        self.trace_header.update({'fstart' : self._imm_startfreq})
-        self.trace_header.update({'fstop' : self._imm_stopfreq})
-        self.trace_header.update({'fstep' : self._imm_stepfreq})
-        self.trace_header.update({'Input' : self._imm_ipchan})
-        self.trace_header.update({'Gain' : self._imm_gain})
-        self.trace_header.update({'bias' : self.plotbias})
-        self.trace_header.update({'scale' : self.plotscale})
-        self.trace_header.update({'colour' : self._imm_colour})
-        self.trace_header.update({'BitRes' : self._imm_bitres})
+        self.trace_state.update({'fstart' : self._imm_startfreq})
+        self.trace_state.update({'fstop' : self._imm_stopfreq})
+        self.trace_state.update({'fstep' : self._imm_stepfreq})
+        self.trace_state.update({'Input' : self._imm_ipchan})
+        self.trace_state.update({'Gain' : self._imm_gain})
+        self.trace_state.update({'bias' : self.plotbias})
+        self.trace_state.update({'scale' : self.plotscale})
+        self.trace_state.update({'colour' : self._imm_colour})
+        self.trace_state.update({'BitRes' : self._imm_bitres})
 
-        self.trace_header.update({'Desc' : self.desc.get()})
+        self.trace_state.update({'Desc' : self.desc.get()})
         return
 
     def compensate(self):
@@ -1436,7 +1436,7 @@ www.asliceofraspberrypi.co.uk\n\
         #print("Compensate:{0:2.6}".format(v))
         return v
 
-    def trace_init(self, trace_header, trace_list):
+    def trace_init(self, trace_state, trace_list):
         """ perform trace sweep from memory """
 
         self.b_reset['command'] = self.reset_trace
@@ -1449,16 +1449,16 @@ www.asliceofraspberrypi.co.uk\n\
 
         # synchronise wobbulator state to trace header
         try:
-            self._imm_startfreq = trace_header['fstart']
-            self._imm_stopfreq = trace_header['fstop']
-            self._imm_stepfreq = trace_header['fstep']
-            self._imm_ipchan = trace_header['Input']
-            self._imm_gain = trace_header['Gain']
-            self._imm_bitres = trace_header['BitRes']
-            colour = trace_header['colour']
-            description = trace_header['Desc']
-            self.plotbias = trace_header['bias']
-            self.plotscale = trace_header['scale']
+            self._imm_startfreq = trace_state['fstart']
+            self._imm_stopfreq = trace_state['fstop']
+            self._imm_stepfreq = trace_state['fstep']
+            self._imm_ipchan = trace_state['Input']
+            self._imm_gain = trace_state['Gain']
+            self._imm_bitres = trace_state['BitRes']
+            colour = trace_state['colour']
+            description = trace_state['Desc']
+            self.plotbias = trace_state['bias']
+            self.plotscale = trace_state['scale']
         except KeyError:
             self.reset_trace()
             messagebox.showerror('Load Error', 'Corrupted Wobbulator Trace File')
@@ -1485,7 +1485,7 @@ www.asliceofraspberrypi.co.uk\n\
         self.fresh_canvas()
 
         if self._imm_record:
-            self.trace_save_header()
+            self.trace_state_save()
 
         self.simplify_x()
         self.simplify_y()
@@ -1523,10 +1523,10 @@ www.asliceofraspberrypi.co.uk\n\
             self.xstart = self.mrgnLeft
 
             if self._imm_record:
-                self.trace_data.update({startfreq : self.save_adapt(self.reading)})
-                #self.trace_data.update({startfreq : self.reading})
+                self.trace_set.update({startfreq : self.save_adapt(self.reading)})
+                #self.trace_set.update({startfreq : self.reading})
 
-            self.trace_data.clear()
+            self.trace_set.clear()
             self._imm_colour = self._colour_cycle
             self.oneflag = False
             if self.cls.get():
@@ -1566,7 +1566,7 @@ www.asliceofraspberrypi.co.uk\n\
             self.plotbias = 0
             self.plotscale = 2
 
-        self.trace_data.clear()
+        self.trace_set.clear()
 
         #  If a sweep dependant value has changed
         if (self.sweep_start_reqd or (self._imm_startfreq != startfreq) or
@@ -1587,7 +1587,7 @@ www.asliceofraspberrypi.co.uk\n\
             self.fresh_canvas()
             self.sweep_start_reqd = False
             if self._imm_record:
-                self.trace_save_header()
+                self.trace_state_save()
         elif self.cls.get():
             self.fresh_canvas()
 
@@ -1613,7 +1613,7 @@ www.asliceofraspberrypi.co.uk\n\
         self._sweep_iterator = self.sweep_iterate(startfreq + stepfreq,
                                             stopfreq + stepfreq, stepfreq)
         if self._imm_record:
-            self.trace_data.update({startfreq : self.save_adapt(self.reading)})
+            self.trace_set.update({startfreq : self.save_adapt(self.reading)})
         self.sweep_start_func = self.sweep_start
         self.sweep_stop_func = self.single_stop
         self.sweep_continue()
@@ -1653,7 +1653,7 @@ www.asliceofraspberrypi.co.uk\n\
 
                 # optionally record trace sweep data for later saving to file
                 if self._imm_record:
-                    self.trace_data.update({frequency : self.save_adapt(self.reading)})
+                    self.trace_set.update({frequency : self.save_adapt(self.reading)})
 
                 # calculate x co-ordinate from the reading
                 xend = int((self.x1 * frequency) - self.x2)
@@ -1701,8 +1701,8 @@ www.asliceofraspberrypi.co.uk\n\
             self.colour_next()
 
         if self._imm_record:
-            # Save data as a list of 'plot sets'
-            self.trace_list.append(deepcopy(self.trace_data))
+            # Save as a list of 'trace plot sets'
+            self.trace_list.append(deepcopy(self.trace_set))
 
         self.undo_list.append([self.undo_trace, ''])
         self.line_list.append(deepcopy(self.line_buffer))
@@ -1915,8 +1915,8 @@ www.asliceofraspberrypi.co.uk\n\
         """
         Initialise\Wipe the trace buffer store
         """
-        self.trace_data.clear()
-        self.trace_header.clear()
+        self.trace_set.clear()
+        self.trace_state.clear()
         self.trace_list[:] = []
         self.reflect_save_state(False)
         return
