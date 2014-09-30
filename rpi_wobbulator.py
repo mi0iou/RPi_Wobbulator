@@ -133,6 +133,9 @@ class WobbyPi():
     trace_set = {}
     trace_list = []
 
+    marker_list = []
+    marker_redraw_list = []
+
     line_buffer = {}
     line_list = []
 
@@ -694,6 +697,7 @@ www.asliceofraspberrypi.co.uk\n\
                     try:
                         trace_state = pickle.load(dataFile)
                         trace_list = pickle.load(dataFile)
+                        marker_list = pickle.load(dataFile)
                     except EOFError:
                         messagebox.showerror('File Error',
                                     'File "{}" is empty!'.format(filename))
@@ -702,7 +706,7 @@ www.asliceofraspberrypi.co.uk\n\
                         messagebox.showerror('File Error',
                                     'File "{}" is corrupt!'.format(filename))
                         return
-                self.trace_init(trace_state, trace_list)
+                self.trace_init(trace_state, trace_list, marker_list)
             else:
                 messagebox.showerror('Bad file extension',
                                     'Only WTF file format is supported\n' + 
@@ -724,6 +728,7 @@ www.asliceofraspberrypi.co.uk\n\
                         try:
                             pickle.dump(self.trace_state, dataFile)
                             pickle.dump(self.trace_list, dataFile)
+                            pickle.dump(self.marker_list, dataFile)
                         except pickle.PicklingError:
                             messagebox.showerror('File Error',
                                                         'File is corrupt!')
@@ -800,10 +805,12 @@ www.asliceofraspberrypi.co.uk\n\
         """ Mouse Right Button Down & Movement """
         # erase current mark
         self.undo()
-        # redraw mark at new position
+        # redraw mark text at new position
+        self.marker['xtext'] = event.x
+        self.marker['ytext']  = event.y
         colour = self.canvFg
         ID_list = []
-        self.place_marker(ID_list, event.x, event.y, colour)
+        self.place_marker(ID_list, colour)
         self.undo_list.append([self.undo_marker, deepcopy(ID_list)])
         del ID_list
         return
@@ -812,11 +819,16 @@ www.asliceofraspberrypi.co.uk\n\
         """ Mouse Right Button Up """
         # erase current mark
         self.undo()
-        # redraw mark at position in correct colour
+        # redraw mark text at final position in correct colour
+        self.marker['xtext'] = event.x
+        self.marker['ytext']  = event.y
+        # Add the mark to the list
+        self.marker_list.append(deepcopy(self.marker))
         colour = self.marker['colour']
         ID_list = []
-        self.place_marker(ID_list, event.x, event.y, colour)
-        self.undo_list.append([self.undo_marker, deepcopy(ID_list)])
+        self.place_marker(ID_list, colour)
+        # Require undo the marker list as well as the canvas marker
+        self.undo_list.append([self.undo_marker_list, deepcopy(ID_list)])
         del ID_list
         return
 
@@ -833,11 +845,13 @@ www.asliceofraspberrypi.co.uk\n\
         # create mark at current position
         self.marker = {}
         self.marker['mtext'] = self.marker_label(event)
-        self.marker['x'] = mx = event.x
-        self.marker['y'] = my = event.y
+        self.marker['xtext'] = event.x
+        self.marker['ytext']  = event.y
+        self.marker['x'] = event.x
+        self.marker['y'] = event.y
         self.marker['colour'] = colour
         ID_list = []
-        self.place_marker(ID_list, event.x, event.y, colour)
+        self.place_marker(ID_list, colour)
         self.undo_list.append([self.undo_marker, deepcopy(ID_list)])
         del ID_list
         return
@@ -851,6 +865,19 @@ www.asliceofraspberrypi.co.uk\n\
             # Input Channel 2 (dBm)
             p = self.volts_dBm(v)
             return '{0:02.1f} dBm\n{1:02.3f} V\n'.format(p, v) + f
+
+    def marker_list_redraw(self):
+        while len(self.marker_redraw_list):
+            self.marker = self.marker_redraw_list.pop()
+            # Add the mark to the list
+            self.marker_list.append(deepcopy(self.marker))
+            colour = self.marker['colour']
+            ID_list = []
+            self.place_marker(ID_list, colour)
+            # Require undo the marker list as well as the canvas marker
+            self.undo_list.append([self.undo_marker_list, deepcopy(ID_list)])
+            del ID_list
+        return
 
     def calibrate(self):
         msg = 'This calibration method is invalid\nPlease ignore and calibrate manually'
@@ -914,10 +941,12 @@ www.asliceofraspberrypi.co.uk\n\
         """ convert dBm to the AD8307 milli-volt representation """
         return ((dBm - self.dBm_offset) * self.VdBm)
 
-    def place_marker(self, marker_list, text_x, text_y, colour):
+    def place_marker(self, marker_list, colour):
         """ Draw trace mark and related text label """
         # draw text at given x\y co-ordinates
         mtext = self.marker['mtext']
+        text_x = self.marker['xtext']
+        text_y = self.marker['ytext']
         itemID = canvas.create_text(text_x, text_y - 20, anchor = CENTER,
                                     fill = colour, font = self.text_font,
                                             text = mtext, tag = 'marker')
@@ -998,23 +1027,22 @@ www.asliceofraspberrypi.co.uk\n\
         self.mld_common(event, 'blue')
         return
 
-    # clear the canvas
     def fresh_canvas(self):
         """ reclaim and re-draw canvas area """
         for key, val in self._colour_option.items():
             tag = 'p_' + val
             canvas.delete(tag)
-        #canvas.delete('plot')
         canvas.delete('marker')
         self.memstore_reset()
         self.label_yscale()
         self.label_xscale()
         self.graticule_update()
         self.desc_update()
-
+        # clear associated lists
         self.undo_list_reset()
         self.line_list_reset()
         self.trace_list_reset()
+        self.marker_list_reset()
         return
 
     def graticule_update(self):
@@ -1191,17 +1219,18 @@ www.asliceofraspberrypi.co.uk\n\
             assert False
 
         # FIXME: by also 'undo'ing immutable state changes the following
-        # will automagically work and be FIXED!
+        # 1 & 2 FIXME's will automagically work and be FIXED!
 
         if self._imm_record:
-            # FIXME: fataly assumes record state never changed.
+            # FIXME: 1) fataly assumes record state never changed.
+            # FIXME: should remove any markers on this trace
             # remove the 'was current' trace from the record list
             if len(self.trace_list):
                 del self.trace_list[len(self.trace_list)-1]
 
         self.reflect_save_state(len(self.trace_list))
 
-        # FIXME: will only work for the first 'undo' occurrence
+        # FIXME: 2) will only work for the first 'undo' occurrence
         if self.colcyc.get():
             while self._colour_cycle != self._imm_colour:
                 self.colour_next()
@@ -1436,8 +1465,11 @@ www.asliceofraspberrypi.co.uk\n\
         #print("Compensate:{0:2.6}".format(v))
         return v
 
-    def trace_init(self, trace_state, trace_list):
+    def trace_init(self, trace_state, trace_list, marker_list):
         """ perform trace sweep from memory """
+
+        # cannot process here, store for use on completion
+        self.marker_redraw_list = marker_list
 
         self.b_reset['command'] = self.reset_trace
         self.b_reset.config(state = NORMAL)
@@ -1739,6 +1771,7 @@ www.asliceofraspberrypi.co.uk\n\
 
     def trace_stop(self):
         """ stop trace sweep """
+        self.marker_list_redraw()
         if _has_wobbulator:
             self.b_action.config(state = NORMAL)
             self.b_sweep.config(state = NORMAL)
@@ -1866,6 +1899,12 @@ www.asliceofraspberrypi.co.uk\n\
         while len(markerIDs):
             marker = markerIDs.pop()
             canvas.delete(marker)
+        return
+
+    def undo_marker_list(self, markerIDs):
+        self.undo_marker(markerIDs)
+        self.marker_list.pop()
+        return
 
     def colour_iterate(self):
         """ generator for colour options """
@@ -1915,10 +1954,17 @@ www.asliceofraspberrypi.co.uk\n\
         """
         Initialise\Wipe the trace buffer store
         """
-        self.trace_set.clear()
         self.trace_state.clear()
+        self.trace_set.clear()
         self.trace_list[:] = []
         self.reflect_save_state(False)
+        return
+
+    def marker_list_reset(self):
+        """
+        Initialise\Wipe the marker list
+        """
+        self.marker_list[:] = []
         return
 
     def line_list_reset(self):

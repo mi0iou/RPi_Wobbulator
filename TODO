@@ -12,13 +12,13 @@ DONE: Add 'fileencoding=ascii' to the vim editor (2nd) line to comply with PEP-0
 RPi_Wobbulator
 ~~~~~~~~~~~~~~
 
-save marker & associated text in wtf file
 Add keybindings for keyboard menu operation
 Format Help & About messagebox text
 
 Consider:
 Trace removal could be more fine-grained by using trace colour as the tag
 
+DONE: save marker & associated text in wtf file
 DONE: Implement file sweep record\playback
 DONE: Include 'Description' in image
 DONE: Be consistent about 'Version', derive every occurrance from the same definition
