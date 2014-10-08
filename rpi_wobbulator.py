@@ -801,61 +801,6 @@ www.asliceofraspberrypi.co.uk\n\
             canvas.tag_bind(tag, "<B3-ButtonRelease>", self.mru_common)
         return
 
-    def mrd_movement(self, event):
-        """ Mouse Right Button Down & Movement """
-        # erase current mark
-        self.undo()
-        # redraw mark text at new position
-        self.marker['xtext'] = event.x
-        self.marker['ytext']  = event.y
-        colour = self.canvFg
-        ID_list = []
-        self.place_marker(ID_list, colour)
-        self.undo_list.append([self.undo_marker, deepcopy(ID_list)])
-        del ID_list
-        return
-
-    def mru_common(self, event):
-        """ Mouse Right Button Up """
-        # erase current mark
-        self.undo()
-        # redraw mark text at final position in correct colour
-        self.marker['xtext'] = event.x
-        self.marker['ytext']  = event.y
-        # Add the mark to the list
-        self.marker_list.append(deepcopy(self.marker))
-        colour = self.marker['colour']
-        ID_list = []
-        self.place_marker(ID_list, colour)
-        # Require undo the marker list as well as the canvas marker
-        self.undo_list.append([self.undo_marker_list, deepcopy(ID_list)])
-        del ID_list
-        return
-
-    def mrd_common(self, event, colour):
-        """ Mouse Right Button Down """
-        # Issues with tkinter
-        # BUG: depressing right mouse button before releasing
-        # left button can cause the left release to be missed.
-        # BUG: depressing left mouse button over trace then
-        # moving mouse off trace and depressing right button
-        # (off trace) invokes mrd_?????, causing a mark to be
-        # placed off trace.
-        self.mlu_common(event)
-        # create mark at current position
-        self.marker = {}
-        self.marker['mtext'] = self.marker_label(event)
-        self.marker['xtext'] = event.x
-        self.marker['ytext']  = event.y
-        self.marker['x'] = event.x
-        self.marker['y'] = event.y
-        self.marker['colour'] = colour
-        ID_list = []
-        self.place_marker(ID_list, colour)
-        self.undo_list.append([self.undo_marker, deepcopy(ID_list)])
-        del ID_list
-        return
-
     def marker_label(self, event):
         f = self.convf(int((event.x + self.x2) / self.x1))
         v = ((self.y1 - event.y) / (self.y2 * self._imm_gain))
@@ -864,82 +809,7 @@ www.asliceofraspberrypi.co.uk\n\
         else:
             # Input Channel 2 (dBm)
             p = self.volts_dBm(v)
-            return '{0:02.1f} dBm\n{1:02.3f} V\n'.format(p, v) + f
-
-    def marker_list_redraw(self):
-        while len(self.marker_redraw_list):
-            self.marker = self.marker_redraw_list.pop()
-            # Add the mark to the list
-            self.marker_list.append(deepcopy(self.marker))
-            colour = self.marker['colour']
-            ID_list = []
-            self.place_marker(ID_list, colour)
-            # Require undo the marker list as well as the canvas marker
-            self.undo_list.append([self.undo_marker_list, deepcopy(ID_list)])
-            del ID_list
-        return
-
-    def calibrate(self):
-        msg = 'This calibration method is invalid\nPlease ignore and calibrate manually'
-        messagebox.showinfo('Wobbulator Calibration', msg)
-        msg = 'Please remove any connection\n' + \
-              'from the Channel 2 Input.' + \
-                '\nClick on OK when ready to test.'
-        messagebox.showinfo('Wobbulator Calibration', msg)
-        self.ipchan.set(2)
-        self.ipchan_update()
-        gain = 1
-        self.gain.set(gain)
-        self.gain_update()
-        self.dds.set_wave(0)
-
-        plotbias = self.VdBm_bias * gain
-
-        adj = self.bias_adj(self.compensate(), gain)
-        # check error adjustment is within a half dBm
-        if abs(adj) > self.VdBm / 2:
-            msg = 'Please adjust VR2 for a cyclic sweep reading of ' + \
-                '{} dBm with Channel 2 Input disconnected'.format(self.dBm_start)
-            self.bitres.set(12)
-            self.bitres_update()
-            self.cls.set(0)
-            self.record.set(0)
-            self.record_update()
-            self.memstore.set(0)
-            self.memstore_update()
-            self.colcyc.set(1)
-            self.colour_update()
-            self.autostep.set(1)
-            self.autostep_update()
-            self.reset_sweep()
-            # FIXME:
-            # What frequency range should the calibration be performed over?
-            # As there is not supposed to be any coupling to the input
-            # it should not make any difference, in reality there is!
-            self.fstart.set("0")
-            self.fstop.set("30M")
-            self.freq_update(None)
-            self.cycle_sweep()
-        else:
-            msg = 'Channel 2 Input calibration\n' + \
-                    'is within normal parameters\n' + \
-                    '(error: {0:1.3} dBm).'.format(adj / self.VdBm)
-        messagebox.showinfo('Wobbulator Calibration', msg)
-        return
-
-    def bias_adj(self, measured_bias, gain):
-        # adjustment = measured_bias - scale_bias
-        return ((measured_bias / gain) - (self.VdBm
-                            * abs(self.dBm_start - self.dBm_offset)))
-
-    def volts_dBm(self, volts):
-        """ convert the AD8307 milli-volt representation to dBm """
-        # (volts / volts per dBm) + dBm @ 0v
-        return ((volts / self.VdBm) + self.dBm_offset)
-
-    def dBm_volts(self, dBm):
-        """ convert dBm to the AD8307 milli-volt representation """
-        return ((dBm - self.dBm_offset) * self.VdBm)
+            return '{0:02.1f} dBm\n'.format(p) + f
 
     def place_marker(self, marker_list, colour):
         """ Draw trace mark and related text label """
@@ -960,6 +830,72 @@ www.asliceofraspberrypi.co.uk\n\
         itemID = canvas.create_line(mx - 3, my + 3, mx + 4, my - 4,
                                             fill = colour, tag = 'marker')
         marker_list.append(itemID)
+        return
+
+    def movable_mark(self, event):
+        """ Move mark text label of an existing mark to new position """
+        self.marker['xtext'] = event.x
+        self.marker['ytext']  = event.y
+        colour = self.canvFg
+        ID_list = []
+        self.place_marker(ID_list, colour)
+        self.undo_list.append([self.undo_marker, deepcopy(ID_list)])
+        del ID_list
+        return
+
+    def mrd_common(self, event, colour):
+        """ Mouse Right Button Down """
+        # Issues with tkinter
+        # BUG: depressing right mouse button before releasing
+        # left button can cause the left release to be missed.
+        # BUG: depressing left mouse button over trace then
+        # moving mouse off trace and depressing right button
+        # (off trace) invokes mrd_?????, causing a mark to be
+        # placed off trace.
+        self.mlu_common(event)
+        # create mark at current position
+        self.marker = {}
+        self.marker['mtext'] = self.marker_label(event)
+        self.marker['colour'] = colour
+        self.marker['x'] = event.x
+        self.marker['y'] = event.y
+        self.movable_mark(event)
+        return
+
+    def mrd_movement(self, event):
+        """ Mouse Right Button Down & Movement """
+        # erase current mark
+        self.undo()
+        # redraw mark text at new position
+        self.movable_mark(event)
+        return
+
+    def mru_common(self, event):
+        """ Mouse Right Button Up """
+        # erase current mark
+        self.undo()
+        # redraw mark text at final position in correct colour
+        self.marker['xtext'] = event.x
+        self.marker['ytext']  = event.y
+        self.mru_mark()
+        return
+
+    def mru_mark(self):
+        # Add the mark to the canvas & lists
+        self.marker_list.append(deepcopy(self.marker))
+        ID_list = []
+        colour = self.marker['colour']
+        self.place_marker(ID_list, colour)
+        # Require undo the marker list as well as the canvas marker
+        self.undo_list.append([self.undo_marker_list, deepcopy(ID_list)])
+        del ID_list
+        return
+
+    def marker_list_redraw(self):
+        while len(self.marker_redraw_list):
+            self.marker = self.marker_redraw_list.pop()
+            # Add the mark to the canvas & lists
+            self.mru_mark()
         return
 
     def mrd_red(self, event):
@@ -1026,6 +962,68 @@ www.asliceofraspberrypi.co.uk\n\
         """ Mouse Left Button Down """
         self.mld_common(event, 'blue')
         return
+
+    def calibrate(self):
+        msg = 'This calibration method is invalid\nPlease ignore and calibrate manually'
+        messagebox.showinfo('Wobbulator Calibration', msg)
+        msg = 'Please remove any connection\n' + \
+              'from the Channel 2 Input.' + \
+                '\nClick on OK when ready to test.'
+        messagebox.showinfo('Wobbulator Calibration', msg)
+        self.ipchan.set(2)
+        self.ipchan_update()
+        gain = 1
+        self.gain.set(gain)
+        self.gain_update()
+        self.dds.set_wave(0)
+
+        plotbias = self.VdBm_bias * gain
+
+        adj = self.bias_adj(self.compensate(), gain)
+        # check error adjustment is within a half dBm
+        if abs(adj) > self.VdBm / 2:
+            msg = 'Please adjust VR2 for a cyclic sweep reading of ' + \
+                '{} dBm with Channel 2 Input disconnected'.format(self.dBm_start)
+            self.bitres.set(12)
+            self.bitres_update()
+            self.cls.set(0)
+            self.record.set(0)
+            self.record_update()
+            self.memstore.set(0)
+            self.memstore_update()
+            self.colcyc.set(1)
+            self.colour_update()
+            self.autostep.set(1)
+            self.autostep_update()
+            self.reset_sweep()
+            # FIXME:
+            # What frequency range should the calibration be performed over?
+            # As there is not supposed to be any coupling to the input
+            # it should not make any difference, in reality there is!
+            self.fstart.set("0")
+            self.fstop.set("30M")
+            self.freq_update(None)
+            self.cycle_sweep()
+        else:
+            msg = 'Channel 2 Input calibration\n' + \
+                    'is within normal parameters\n' + \
+                    '(error: {0:1.3} dBm).'.format(adj / self.VdBm)
+        messagebox.showinfo('Wobbulator Calibration', msg)
+        return
+
+    def bias_adj(self, measured_bias, gain):
+        # adjustment = measured_bias - scale_bias
+        return ((measured_bias / gain) - (self.VdBm
+                            * abs(self.dBm_start - self.dBm_offset)))
+
+    def volts_dBm(self, volts):
+        """ convert the AD8307 milli-volt representation to dBm """
+        # (volts / volts per dBm) + dBm @ 0v
+        return ((volts / self.VdBm) + self.dBm_offset)
+
+    def dBm_volts(self, dBm):
+        """ convert dBm to the AD8307 milli-volt representation """
+        return ((dBm - self.dBm_offset) * self.VdBm)
 
     def fresh_canvas(self):
         """ reclaim and re-draw canvas area """
