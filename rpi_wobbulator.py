@@ -1691,17 +1691,27 @@ www.asliceofraspberrypi.co.uk\n\
                 yend = int(self.y1 - (self.reading * self.y2))
 
                 # restrict plotting range to within graticule display area, any
-                # out-of-bounds plotting will also show up on any saved images
-                if (self.ystart > self.mrgnTop) and (yend < self.mrgnTop):
-                    # plotting up the display, clamp the end
-                    yend = self.mrgnTop
-                elif (self.ystart < self.mrgnTop) and (yend > self.mrgnTop):
-                    # plotting down the display, clamp the start
-                    self.ystart = self.mrgnTop
+                # out-of-bounds plotting would also show up on any saved images
+                if ((self.ystart > self.mrgnTop) and
+                                (self.ystart < (self.canvHt - self.mrgnTop))):
+                    # start is on canvas
+                    if (yend < self.mrgnTop):
+                        yend = self.mrgnTop
+                    elif (yend > (self.canvHt - self.mrgnTop)):
+                        yend = self.canvHt - self.mrgnTop
+                    doplot = True
+                elif ((yend > self.mrgnTop) and
+                                        (yend < (self.canvHt - self.mrgnTop))):
+                    # end is on canvas
+                    if (self.ystart < self.mrgnTop):
+                        self.ystart = self.mrgnTop
+                    elif (self.ystart > (self.canvHt - self.mrgnTop)):
+                        self.ystart = self.canvHt - self.mrgnTop
+                    doplot = True
+                else:
+                    doplot = False
 
-                # plot the trace line
-                if (self.ystart > self.mrgnTop) or (yend > self.mrgnTop):
-                    # both ends are in range, one may have been clamped
+                if doplot:
                     tag_colour = 'p_' + self._imm_colour
                     lineID = canvas.create_line(self.xstart, self.ystart,
                         xend, yend, fill = self._imm_colour, tag = tag_colour)
