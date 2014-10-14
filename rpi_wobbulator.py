@@ -208,9 +208,9 @@ class WobbyPi():
 
         # setup working parameters
 
-        # The Wobbulator AD8307 LogAmp has a dynamic range of -75 dBm to
-        # +16 dBm giving a range of +92dBm, with an intercept of -84 dBm.
-        # So -75 dBm = 0v.
+        # The Wobbulator AD8307 LogAmp has a dynamic range of 92dB, extending
+        # from -75dBm to +17dBm when used without an input matching network.
+        # So the 'Intercept' (0 Volt output) is at -75 dBm.
         self.dBm_offset = -75
 
         # The following parameter values are inter-dependant on each other
@@ -225,8 +225,8 @@ class WobbyPi():
         # The Wobbulator AD8307 LogAmp has no power supply decoupling, no
         # output decoupling, no screening, and no input filtering. The result
         # is a very high noise floor, limiting the useful minimum input.
-        # This noise level can exceed -50 dBm.
-        # Select a bias value for a -45 dBm start.
+        # This noise level can exceed -50dBm.
+        # Selected a bias value (not less than 0.5V) for a -45dBm start.
         # VdBm_bias = abs(dBm_start - dBm_offset) * VdBm
         self.VdBm_bias = 0.6
 
@@ -234,17 +234,17 @@ class WobbyPi():
         # input which can handle an estimated input of 0.1W, which is a
         # maximum input of 20 dBm.
 
-        # The Wobbulator provides a 3.3V supply to the AD8307 LogAmp.
-        # With an unbalanced input the largest signal that can be
-        # handled by the AD8307 LogAmp when operating from a 3 V supply
-        # is 10 dBm (sine amplitude of ±1 V).
-        # 16 dBm could have been handled using a 5 V supply.
+        # The Wobbulator AD8307 LogAmp is provided with a 3.3V supply.
+        # With an unbalanced input the largest signal that can be handled by
+        # the AD8307 LogAmp when operating from a 3V supply is +10dBm (sine
+        # amplitude of ±1 V) +16dBm could have been handled using a 5V supply.
         # The Wobbulator AD9850 DDS Module has a maximum output of
         # approximately -8 dBm.
+        # Selected a end scale of +5dBm giving 50dB range for a -45dBm start.
         dBm_end = 5
 
-        # The Wobbulator AD8307 LogAmp 'Volts per dBm' are calibrated
-        # by adjusting VR2, the approxmate range is from 11mV to 22mV.
+        # The Wobbulator AD8307 LogAmp Slope 'Volts per dBm' is calibrated
+        # by VR2, the approxmate adjustment range is from 11mV to 22mV.
         self.VdBm = 0.02
 
         #self.VdBm_bias = abs(self.dBm_start - self.dBm_offset) * self.VdBm
@@ -962,6 +962,21 @@ www.asliceofraspberrypi.co.uk\n\
         self.mld_common(event, 'blue')
         return
 
+    """
+    To find the equation of a straight line given two known points...
+    Note the dBm measurement, dBm1 for a given voltage input V1,
+    take a second dBm mesurement. dBm2 with a different voltage input V2
+    'dBm per Volt' = (dBm1 - dBm2) / (V1 - V2)
+    To convert to 'Volts per dBm', take the reciprocol
+    Volts per dBm = 1 / ((dBm1 - dBm2) / (V1 - V2))
+
+    Slope is 'dBm per Volt'
+    dBm = (Volts * Slope) + Intercept
+    Intercept = dBm - (Volts * Slope)
+    Slope = (dBm - Intercept) / Volts
+    Volts = (dBm - Intercept) / Slope
+    """
+
     def calibrate(self):
         msg = 'This calibration method is invalid\nPlease ignore and calibrate manually'
         messagebox.showinfo('Wobbulator Calibration', msg)
@@ -1207,6 +1222,8 @@ www.asliceofraspberrypi.co.uk\n\
             canvas.delete(lineID)
         self.line_buffer.clear()
 
+        # FIXME: 'line_buffer' is a duplicate of the last entry in 'line_list',
+        # the wobbulator program could be rewritten to avoid duplication.
         if len(self.line_list):
             # remove the 'current' trace from the list
             self.line_list.pop()
