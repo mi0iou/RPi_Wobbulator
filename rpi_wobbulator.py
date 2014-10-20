@@ -817,18 +817,19 @@ www.asliceofraspberrypi.co.uk\n\
         mtext = self.marker['mtext']
         text_x = self.marker['xtext']
         text_y = self.marker['ytext']
+        tag_marker = 'm_' + colour
         itemID = canvas.create_text(text_x, text_y - 20, anchor = CENTER,
                                     fill = colour, font = self.text_font,
-                                            text = mtext, tag = 'marker')
+                                            text = mtext, tag = tag_marker)
         marker_list.append(itemID)
         # draw trace mark at original x\y co-ordinates
         mx = self.marker['x']
         my = self.marker['y']
         itemID = canvas.create_line(mx - 3, my - 3, mx + 4, my + 4,
-                                            fill = colour, tag = 'marker')
+                                            fill = colour, tag = tag_marker)
         marker_list.append(itemID)
         itemID = canvas.create_line(mx - 3, my + 3, mx + 4, my - 4,
-                                            fill = colour, tag = 'marker')
+                                            fill = colour, tag = tag_marker)
         marker_list.append(itemID)
         return
 
@@ -1027,11 +1028,8 @@ www.asliceofraspberrypi.co.uk\n\
 
     def fresh_canvas(self):
         """ reclaim and re-draw canvas area """
-        for key, val in self._colour_option.items():
-            tag = 'p_' + val
-            canvas.delete(tag)
-        canvas.delete('marker')
         self.memstore_reset()
+        self.trace_erase()
         self.label_yscale()
         self.label_xscale()
         self.graticule_update()
@@ -1145,18 +1143,23 @@ www.asliceofraspberrypi.co.uk\n\
         """ record sweep state change, placeholder """
         pass
 
+    def trace_erase(self):
+        for key, colour in self._colour_option.items():
+            tag_colour = 'p_' + colour
+            canvas.delete(tag_colour)
+            # delete any trace marker's
+            tag_colour = 'm_' + colour
+            canvas.delete(tag_colour)
+        # delete any 'out-of-range' too
+        canvas.delete('p_white')
+        canvas.delete('m_white')
+        return
+
     def memstore_update(self):
         """ memory store state change """
         if not self.memstore.get():
             self.memstore_reset()
-            for key, val in self._colour_option.items():
-                tag = 'p_' + val
-                canvas.delete(tag)
-            #canvas.delete('plot')
-            canvas.delete('marker')
-            # reclaiming plot tags may remove wanted trace
-            # not reclaiming plot tags may leave unwanted trace
-            # lose : lose
+            self.trace_erase()
         return
 
     def autostep_update(self):
@@ -1674,6 +1677,7 @@ www.asliceofraspberrypi.co.uk\n\
                 if not self.memstore.get():
                     # memory store disabled
                     if frequency in self.line_buffer:
+                        # FIXME: this may leave a 'marker' with no trace
                         # erase the part trace
                         try:
                             lineID = self.line_buffer[frequency]
@@ -1689,6 +1693,17 @@ www.asliceofraspberrypi.co.uk\n\
                 xend = int((self.x1 * frequency) - self.x2)
                 # calculate y co-ordinate from the reading
                 yend = int(self.y1 - (self.reading * self.y2))
+
+                """
+                if (self.ystart > yend):
+                    # plotting up the canvas
+                    self._imm_colour = 'green'
+                elif (yend > self.ystart):
+                    # plotting down the canvas
+                    self._imm_colour = 'red'
+                else:
+                    # plotting across the canvas
+                    self._imm_colour = 'blue'
 
                 # restrict plotting range to within graticule display area, any
                 # out-of-bounds plotting would also show up on any saved images
@@ -1710,16 +1725,31 @@ www.asliceofraspberrypi.co.uk\n\
                     doplot = True
                 else:
                     doplot = False
+                """
 
-                if doplot:
-                    tag_colour = 'p_' + self._imm_colour
-                    lineID = canvas.create_line(self.xstart, self.ystart,
-                        xend, yend, fill = self._imm_colour, tag = tag_colour)
+                colour = self._imm_colour
+                if (yend < self.mrgnTop):
+                    yend = self.mrgnTop - 3
+                    colour = 'white'
+                elif (yend > (self.canvHt - self.mrgnTop)):
+                    yend = (self.canvHt - self.mrgnTop) + 1
+                    colour = 'white'
 
-                    # record the trace handle for later individual removal
-                    self.line_buffer.update({frequency : lineID})
+                if (self.ystart < self.mrgnTop):
+                    self.ystart = self.mrgnTop - 3
+                    colour = 'white'
+                elif (self.ystart > (self.canvHt - self.mrgnTop)):
+                    self.ystart = (self.canvHt - self.mrgnTop) + 1
+                    colour = 'white'
 
-                    canvas.update_idletasks()
+                tag_colour = 'p_' + colour
+                lineID = canvas.create_line(self.xstart, self.ystart,
+                    xend, yend, fill = colour, tag = tag_colour)
+
+                # record the trace handle for later individual removal
+                self.line_buffer.update({frequency : lineID})
+
+                canvas.update_idletasks()
 
                 self.xstart = xend
                 self.ystart = yend
