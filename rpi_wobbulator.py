@@ -1252,6 +1252,8 @@ www.asliceofraspberrypi.co.uk\n\
             if not len(self.undo_list):
                 self.b_undo.config(state = DISABLED)
             (fn_arg[0])(fn_arg[1])
+            # fn_arg[0] is responsible for unallocating fn_arg[1]
+            del fn_arg[0]
         return
 
     def fconv(self, f):
