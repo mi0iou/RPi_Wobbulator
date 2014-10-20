@@ -840,8 +840,7 @@ www.asliceofraspberrypi.co.uk\n\
         colour = self.canvFg
         ID_list = []
         self.place_marker(ID_list, colour)
-        self.undo_list.append([self.undo_marker, deepcopy(ID_list)])
-        del ID_list
+        self.undo_list.append([self.undo_marker, ID_list])
         return
 
     def mrd_common(self, event, colour):
@@ -884,12 +883,11 @@ www.asliceofraspberrypi.co.uk\n\
     def mru_mark(self):
         # Add the mark to the canvas & lists
         self.marker_list.append(deepcopy(self.marker))
-        ID_list = []
         colour = self.marker['colour']
+        ID_list = []
         self.place_marker(ID_list, colour)
         # Require undo the marker list as well as the canvas marker
-        self.undo_list.append([self.undo_marker_list, deepcopy(ID_list)])
-        del ID_list
+        self.undo_list.append([self.undo_marker_list, ID_list])
         return
 
     def marker_list_redraw(self):
