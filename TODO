@@ -12,6 +12,9 @@ DONE: Add 'fileencoding=ascii' to the vim editor (2nd) line to comply with PEP-0
 RPi_Wobbulator
 ~~~~~~~~~~~~~~
 
+The program is far too procedural, several issues could
+be overcome using a more object orientated methodology.
+
 Add keybindings for keyboard menu operation
 Format Help & About messagebox text
 
