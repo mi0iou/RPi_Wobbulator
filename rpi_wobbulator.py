@@ -206,6 +206,13 @@ class WobbyPi():
         self.fEnd = params['fEnd']
         self.fIntvl = params['fIntvl']
 
+
+        # design changes
+        # C2 1nF <> 100nF [drop channel 2 input 3dB corner frequency to 30kHz]
+        # C9 <> add 1M Ohm parallel resistor [improve channel 1 decay slew rate]
+        # VR1, C7, D1 <> loose voltage doubler [improve channel 1 dynamic range]
+        # IC1 Pin4 <> add 100nF to ground [improve sampling & reduce noise injection]
+
         # setup working parameters
 
         # The Wobbulator AD8307 LogAmp has a dynamic range of 92dB, extending
