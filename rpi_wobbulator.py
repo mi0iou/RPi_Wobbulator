@@ -207,11 +207,13 @@ class WobbyPi():
         self.fIntvl = params['fIntvl']
 
 
-        # design changes
-        # C2 1nF <> 100nF [drop channel 2 input 3dB corner frequency to 30kHz]
+        # trivial design changes
+        # C2 + C3 1nF <> 100nF [drop channel 2 input 3dB corner frequency to 30kHz]
         # C9 <> add 1M Ohm parallel resistor [improve channel 1 decay slew rate]
-        # VR1, C7, D1 <> loose voltage doubler [improve channel 1 dynamic range]
         # IC1 Pin4 <> add 100nF to ground [improve sampling & reduce noise injection]
+        # other design changes
+        # VR1, R4, C5, C7, D1, D2, R4  <> replace voltage doubler circuitry for
+        # peak voltage detector [improve channel 1 sensitivity and dynamic range]
 
         # setup working parameters
 
@@ -229,6 +231,8 @@ class WobbyPi():
         # MCP3424 ADC which has an input voltage ceiling of 2.0V.
 
         # The Wobbulator AD8307 LogAmp is non-linear for outputs below 0.5V.
+        # This could be resolved in software by creating a 'compensation table'
+        # but currently isn't.
         # The Wobbulator AD8307 LogAmp has no power supply decoupling, no
         # output decoupling, no screening, and no input filtering. The result
         # is a very high noise floor, limiting the useful minimum input.
