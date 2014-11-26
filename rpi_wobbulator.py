@@ -68,17 +68,19 @@ try:
 except:
     import pickle
 
-version = '2.7-001'
+version = '2.7-002'
 
 params = {}
 
 def default_parameters():
     print('Loading default settings')
     params['version'] = version
-    params['chrtHt'] = 500
+    params['chrtHt1'] = 480
+    params['chrtHt2'] = 480
     params['chrtWid'] = 500
     params['xDivs'] = 10
-    params['yDivs'] = 10
+    params['yDivs1'] = 10
+    params['yDivs2'] = 12
     params['canvFg'] = 'black'
     params['canvBg'] = '#00a4a4'
     params['fBegin'] = 0
@@ -193,15 +195,17 @@ class WobbyPi():
         self.mrgnLeft = 56
         self.mrgnRight = 20
         self.mrgnTop = 30
-        self.mrgnBotm = 30
+        self.mrgnBotm = 35
 
         # user values
         self.canvFg = params['canvFg']
         self.canvBg = params['canvBg']
-        self.chrtHt = int(params['chrtHt'])
+        self.chrtHt1 = int(params['chrtHt1'])
+        self.chrtHt2 = int(params['chrtHt2'])
         self.chrtWid = int(params['chrtWid'])
         self.xDivs = params['xDivs']
-        self.yDivs = params['yDivs']
+        self.yDivs1 = params['yDivs1']
+        self.yDivs2 = params['yDivs2']
         self.fBegin = params['fBegin']
         self.fEnd = params['fEnd']
         self.fIntvl = params['fIntvl']
@@ -237,9 +241,9 @@ class WobbyPi():
         # output decoupling, no screening, and no input filtering. The result
         # is a very high noise floor, limiting the useful minimum input.
         # This noise level can exceed -50dBm.
-        # Selected a bias value (not less than 0.5V) for a -45dBm start.
+        # Selected a bias value (not less than 0.5V) for a -50dBm start.
         # VdBm_bias = abs(dBm_start - dBm_offset) * VdBm
-        self.VdBm_bias = 0.6
+        self.VdBm_bias = 0.5
 
         # The Wobbulator AD8307 LogAmp has a 50 Ohm 0805 SMD across the
         # input which can handle an estimated input of 0.1W, which is a
@@ -251,8 +255,8 @@ class WobbyPi():
         # amplitude of ±1 V) +16dBm could have been handled using a 5V supply.
         # The Wobbulator AD9850 DDS Module has a maximum output of
         # approximately -8 dBm.
-        # Selected a end scale of +5dBm giving 50dB range for a -45dBm start.
-        dBm_end = 5
+        # Selected a end scale of +10dBm giving 60dB range for a -50dBm start.
+        dBm_end = 10
 
         # The Wobbulator AD8307 LogAmp Slope 'Volts per dBm' is calibrated
         # by VR2, the approxmate adjustment range is from 11mV to 22mV.
@@ -269,7 +273,7 @@ class WobbyPi():
 
         # setup canvas to display results
         global canvas
-        self.canvHt = self.mrgnTop + self.chrtHt + self.mrgnBotm
+        self.canvHt = self.mrgnTop + max(self.chrtHt1, self.chrtHt2) + self.mrgnBotm
         self.canvWid = self.mrgnLeft + self.chrtWid + self.mrgnRight
         canvas = Canvas(frame, width = self.canvWid, height = self.canvHt,
                                                             bg = self.canvBg)
@@ -616,7 +620,7 @@ www.asliceofraspberrypi.co.uk\n\
         fgColor = colorchooser.askcolor(params['canvFg'],
                                             title = 'Foreground Color')
         if fgColor[1] != 'None':
-            params['canvFg'] = fgColor[1]
+            # params['canvFg'] = fgColor[1]
             self.canvFg = fgColor[1]
         return
 
@@ -624,7 +628,7 @@ www.asliceofraspberrypi.co.uk\n\
         bgColor = colorchooser.askcolor(params['canvBg'],
                                             title = 'Background Color')
         if bgColor[1] != 'None':
-            params['canvBg'] = bgColor[1]
+            # params['canvBg'] = bgColor[1]
             self.canvBg = bgColor[1]
             canvas.configure(background=self.canvBg)
         return
@@ -634,17 +638,25 @@ www.asliceofraspberrypi.co.uk\n\
                                             initialvalue = params['chrtWid'],
                                             minvalue = 300, maxvalue = 1000)
         if chrtWid != 'None':
-            params['chrtWid'] = chrtWid
+            # params['chrtWid'] = chrtWid
             self.chrtWid = chrtWid
         return
 
     def getChartHeight(self):
-        chrtHt = simpledialog.askinteger('Chart Height', '300 to 1000',
-                                            initialvalue = params['chrtHt'],
+        if self.ipchan.get() == 2:
+            chrtHt = simpledialog.askinteger('Chart Height', '300 to 1000',
+                                            initialvalue = params['chrtHt2'],
                                             minvalue = 300, maxvalue = 1000)
-        if chrtHt != 'None':
-            params['chrtHt'] = chrtHt
-            self.chrtHt = chrtHt
+            if chrtHt != 'None':
+                # params['chrtHt2'] = chrtHt
+                self.chrtHt2 = chrtHt
+        else:
+            chrtHt = simpledialog.askinteger('Chart Height', '300 to 1000',
+                                            initialvalue = params['chrtHt1'],
+                                            minvalue = 300, maxvalue = 1000)
+            if chrtHt != 'None':
+                # params['chrtHt1'] = chrtHt
+                self.chrtHt1 = chrtHt
         return
 
     def getXdivisions(self):
@@ -652,26 +664,36 @@ www.asliceofraspberrypi.co.uk\n\
                                             initialvalue = params['xDivs'],
                                             minvalue = 10, maxvalue = 50)
         if xDivs != 'None':
-            params['xDivs'] = xDivs
+            # params['xDivs'] = xDivs
             self.xDivs = xDivs
         return
 
     def getYdivisions(self):
-        yDivs = simpledialog.askinteger('Y-divisions', '10-50',
-                                            initialvalue = params['yDivs'],
+        if self.ipchan.get() == 2:
+            yDivs = simpledialog.askinteger('Y-divisions', '6-60',
+                                            initialvalue = params['yDivs2'],
+                                            minvalue = 6, maxvalue = 60)
+            if yDivs != 'None':
+                # params['yDivs2'] = yDivs
+                self.yDivs2 = yDivs
+        else:
+            yDivs = simpledialog.askinteger('Y-divisions', '10-50',
+                                            initialvalue = params['yDivs1'],
                                             minvalue = 10, maxvalue = 50)
-        if yDivs != 'None':
-            params['yDivs'] = yDivs
-            self.yDivs = yDivs
+            if yDivs != 'None':
+                # params['yDivs1'] = yDivs
+                self.yDivs1 = yDivs
         return
 
     def save_params(self):
         global params
         params['version'] = version
-        params['chrtHt'] = self.chrtHt
+        params['chrtHt1'] = self.chrtHt1
+        params['chrtHt2'] = self.chrtHt2
         params['chrtWid'] = self.chrtWid
         params['xDivs'] = self.xDivs
-        params['yDivs'] = self.yDivs
+        params['yDivs1'] = self.yDivs1
+        params['yDivs2'] = self.yDivs2
         params['canvFg'] = self.canvFg
         params['canvBg'] = self.canvBg
         params['fBegin'] = str(self.fstart.get())
@@ -795,6 +817,15 @@ www.asliceofraspberrypi.co.uk\n\
             self.b_sweep.config(state = DISABLED)
             self.b_reset.config(state = DISABLED)
             self.reflect_save_state(False)
+            # FIXME: unsatisfactory duplication here
+            if self.ipchan.get() == 2:
+                self.chrtHt = self.chrtHt2
+                self.yDivs = self.yDivs2
+                self.subDivs = 5
+            else:
+                self.chrtHt = self.chrtHt1
+                self.yDivs = self.yDivs1
+                self.subDivs = 4
         self.fresh_canvas()
         self.colour_sync()
         self.sweep_start_reqd = True
@@ -973,73 +1004,10 @@ www.asliceofraspberrypi.co.uk\n\
         self.mld_common(event, 'blue')
         return
 
-    """
-    To find the equation of a straight line given two known points...
-    Note the dBm measurement, dBm1 for a given voltage input V1,
-    take a second dBm mesurement. dBm2 with a different voltage input V2
-    'dBm per Volt' = (dBm1 - dBm2) / (V1 - V2)
-    To convert to 'Volts per dBm', take the reciprocol
-    Volts per dBm = 1 / ((dBm1 - dBm2) / (V1 - V2))
-
-    Slope is 'dBm per Volt'
-    dBm = (Volts * Slope) + Intercept
-    Intercept = dBm - (Volts * Slope)
-    Slope = (dBm - Intercept) / Volts
-    Volts = (dBm - Intercept) / Slope
-    """
-
     def calibrate(self):
-        msg = 'This calibration method is invalid\nPlease ignore and calibrate manually'
-        messagebox.showinfo('Wobbulator Calibration', msg)
-        msg = 'Please remove any connection\n' + \
-              'from the Channel 2 Input.' + \
-                '\nClick on OK when ready to test.'
-        messagebox.showinfo('Wobbulator Calibration', msg)
-        self.ipchan.set(2)
-        self.ipchan_update()
-        gain = 1
-        self.gain.set(gain)
-        self.gain_update()
-        self.dds.set_wave(0)
-
-        plotbias = self.VdBm_bias * gain
-
-        adj = self.bias_adj(self.compensate(), gain)
-        # check error adjustment is within a half dBm
-        if abs(adj) > self.VdBm / 2:
-            msg = 'Please adjust VR2 for a cyclic sweep reading of ' + \
-                '{} dBm with Channel 2 Input disconnected'.format(self.dBm_start)
-            self.bitres.set(12)
-            self.bitres_update()
-            self.cls.set(0)
-            self.record.set(0)
-            self.record_update()
-            self.memstore.set(0)
-            self.memstore_update()
-            self.colcyc.set(1)
-            self.colour_update()
-            self.autostep.set(1)
-            self.autostep_update()
-            self.reset_sweep()
-            # FIXME:
-            # What frequency range should the calibration be performed over?
-            # As there is not supposed to be any coupling to the input
-            # it should not make any difference, in reality there is!
-            self.fstart.set("0")
-            self.fstop.set("30M")
-            self.freq_update(None)
-            self.cycle_sweep()
-        else:
-            msg = 'Channel 2 Input calibration\n' + \
-                    'is within normal parameters\n' + \
-                    '(error: {0:1.3} dBm).'.format(adj / self.VdBm)
+        msg = 'Not Yet Implemented'
         messagebox.showinfo('Wobbulator Calibration', msg)
         return
-
-    def bias_adj(self, measured_bias, gain):
-        # adjustment = measured_bias - scale_bias
-        return ((measured_bias / gain) - (self.VdBm
-                            * abs(self.dBm_start - self.dBm_offset)))
 
     def volts_dBm(self, volts):
         """ convert the AD8307 milli-volt representation to dBm """
@@ -1093,8 +1061,8 @@ www.asliceofraspberrypi.co.uk\n\
             x = xdatum + int(self.chrtWid / 2)
             xs = x - 4
             xe = x + 5
-            # FIXME: five divisions is not always suitable
-            ystep = int(ystep / 5)
+
+            ystep = int(ystep / self.subDivs)
             for y in range(ydatum + ystep,
                                 ydatum + self.chrtHt + 1 - ystep, ystep):
                 canvas.create_line(xs, y, xe, y, fill = self.canvFg,
@@ -1140,7 +1108,17 @@ www.asliceofraspberrypi.co.uk\n\
         """ input channel change, effect and adjust y-scale labels """
         ipchan = self.ipchan.get()
         self.adc.set_ipchan(ipchan)
+        if ipchan == 2:
+            self.chrtHt = self.chrtHt2
+            self.yDivs = self.yDivs2
+            self.subDivs = 5
+        else:
+            self.chrtHt = self.chrtHt1
+            self.yDivs = self.yDivs1
+            self.subDivs = 4
+        self.label_xscale()
         self.label_yscale()
+        self.graticule_update()
         self.reflect_state()
         return
 
@@ -1533,6 +1511,15 @@ www.asliceofraspberrypi.co.uk\n\
         self.fstop.set(self._imm_stopfreq)
         self.fstep.set(self._imm_stepfreq)
         self.ipchan.set(self._imm_ipchan)
+        # FIXME: unsatisfactory duplication here
+        if self.ipchan.get() == 2:
+            self.chrtHt = self.chrtHt2
+            self.yDivs = self.yDivs2
+            self.subDivs = 5
+        else:
+            self.chrtHt = self.chrtHt1
+            self.yDivs = self.yDivs1
+            self.subDivs = 4
         self.gain.set(self._imm_gain)
         self.bitres.set(self._imm_bitres)
 
