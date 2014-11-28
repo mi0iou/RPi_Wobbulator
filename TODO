@@ -12,6 +12,10 @@ DONE: Add 'fileencoding=ascii' to the vim editor (2nd) line to comply with PEP-0
 RPi_Wobbulator
 ~~~~~~~~~~~~~~
 
+As Eduardo pointed out
+"the difference between frequencies should be lineal or logarithmical selectable"
+
+
 The program is far too procedural, several issues could
 be overcome using a more object orientated methodology.
 
