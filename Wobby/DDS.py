@@ -46,11 +46,15 @@ _DDS_DATA = 18
 # Master Reset
 _DDS_RESET = 22
 
-# DDS crystal oscillator frequency in HZ (assumes 125MHz xtal)
-_DDS_XTAL_CLK = 125000000
+# AD9850 DDS system clock frequency in HZ (assumes 125MHz xtal)
+_DDS_SYS_CLK = 125000000
+
+# AD9851 DDS system clock frequency in HZ
+# (assumes 30MHz xtal * 6 clock multiplier)
+# _DDS_SYS_CLK = 180000000
 
 # program doubleword = frequency * (2^32 / xtal clock)
-_DDS_K_FACTOR = (4294967296 / _DDS_XTAL_CLK)
+_DDS_K_FACTOR = (4294967296 / _DDS_SYS_CLK)
 
 class DDS:
 
@@ -58,7 +62,7 @@ class DDS:
     _sernum = 20140707
 
     # Version 0 Revision 4
-    _vernum = 0.4
+    _vernum = 0.5
 
     # FIXME: specify supported hardware
     # EIModule ADS9850 Signal Generator Module http://www.eimodule.com
@@ -127,9 +131,18 @@ class DDS:
             self._writeb(freq & 0xFF)
             freq = freq >> 8
         phase = (phase << 3) & 0xF8
+        # AD9850 NOTE: the two least significant bits MUST ALWAYS be zero
+        # AD9851 set the reference clock multiplier bit (30MHz x 6)
+        # phase = phase | 0x01
         self._writeb(phase)
         self._pulse_high(_DDS_FQ_UD)
         return
+
+    def maxfreq(self):
+        """
+        Return maximum frequency capability (square wave output)
+        """
+        return _DDS_SYS_CLK / 2
 
     def powerdown(self):
         """
