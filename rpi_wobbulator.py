@@ -640,9 +640,15 @@ www.asliceofraspberrypi.co.uk\n\
         if chrtWid != 'None':
             # params['chrtWid'] = chrtWid
             self.chrtWid = chrtWid
+        # FIXME: duplication
+        self.canvHt = self.mrgnTop + max(self.chrtHt1, self.chrtHt2) + self.mrgnBotm
+        self.canvWid = self.mrgnLeft + self.chrtWid + self.mrgnRight
+        canvas.config(width = self.canvWid, height = self.canvHt)
+        self.reset_common()
         return
 
     def getChartHeight(self):
+        """
         if self.ipchan.get() == 2:
             chrtHt = simpledialog.askinteger('Chart Height', '300 to 1000',
                                             initialvalue = params['chrtHt2'],
@@ -657,6 +663,43 @@ www.asliceofraspberrypi.co.uk\n\
             if chrtHt != 'None':
                 # params['chrtHt1'] = chrtHt
                 self.chrtHt1 = chrtHt
+        """
+        chrtHt = self.chrtHt
+        yDivs = self.yDivs
+        while True:
+            k = self.yDivs * self.subDivs
+            k = self.gcd(self.chrtHt, self.yDivs)
+            chrtHt = simpledialog.askinteger('Chart Height', 'multiples of {}'.format(k),
+                                        initialvalue = self.chrtHt,
+                                        minvalue = 300, maxvalue = 1000)
+            if chrtHt == 'NoneType':
+                #chrtHt = self.chrtHt
+                return
+
+            yDivs = simpledialog.askinteger('Y-divisions', '6-60',
+                                    initialvalue = self.yDivs,
+                                    minvalue = 6, maxvalue = 60)
+            if yDivs == 'NoneType':
+                #yDivs = self.yDivs
+                return
+
+            if chrtHt % yDivs == 0:
+                break;
+
+        if self.ipchan.get() == 2:
+            self.chrtHt2 = chrtHt
+            self.yDivs2 = yDivs
+        else:
+            self.chrtHt1 = chrtHt
+            self.yDivs1 = yDivs
+        self.set_subDivs()
+        self.chrtHt = chrtHt
+        self.yDivs = yDivs
+        # FIXME: duplication
+        self.canvHt = self.mrgnTop + max(self.chrtHt1, self.chrtHt2) + self.mrgnBotm
+        self.canvWid = self.mrgnLeft + self.chrtWid + self.mrgnRight
+        canvas.config(width = self.canvWid, height = self.canvHt)
+        self.reset_common()
         return
 
     def getXdivisions(self):
@@ -821,11 +864,10 @@ www.asliceofraspberrypi.co.uk\n\
             if self.ipchan.get() == 2:
                 self.chrtHt = self.chrtHt2
                 self.yDivs = self.yDivs2
-                self.subDivs = 5
             else:
                 self.chrtHt = self.chrtHt1
                 self.yDivs = self.yDivs1
-                self.subDivs = 4
+            self.set_subDivs()
         self.fresh_canvas()
         self.colour_sync()
         self.sweep_start_reqd = True
@@ -1104,6 +1146,24 @@ www.asliceofraspberrypi.co.uk\n\
             self.sweep_start_reqd = True
         return
 
+    def set_subDivs(self):
+        """
+        # points per division
+        subDivs = chrtHt / yDivs;
+        while subDivs % 2 == 0 and subDivs > 6:
+            subDivs = subDivs / 2
+        subDivs = (chrtHt / yDivs) / subDivs
+
+        Rewrite to calculate from
+        self.chrtHt
+        self.yDivs
+        and the range covered by one division
+        """
+        if self.ipchan.get() == 2:
+            self.subDivs = 5
+        else:
+            self.subDivs = 4
+
     def ipchan_update(self):
         """ input channel change, effect and adjust y-scale labels """
         ipchan = self.ipchan.get()
@@ -1111,11 +1171,10 @@ www.asliceofraspberrypi.co.uk\n\
         if ipchan == 2:
             self.chrtHt = self.chrtHt2
             self.yDivs = self.yDivs2
-            self.subDivs = 5
         else:
             self.chrtHt = self.chrtHt1
             self.yDivs = self.yDivs1
-            self.subDivs = 4
+        self.set_subDivs()
         self.label_xscale()
         self.label_yscale()
         self.graticule_update()
@@ -1515,11 +1574,10 @@ www.asliceofraspberrypi.co.uk\n\
         if self.ipchan.get() == 2:
             self.chrtHt = self.chrtHt2
             self.yDivs = self.yDivs2
-            self.subDivs = 5
         else:
             self.chrtHt = self.chrtHt1
             self.yDivs = self.yDivs1
-            self.subDivs = 4
+        self.set_subDivs()
         self.gain.set(self._imm_gain)
         self.bitres.set(self._imm_bitres)
 
