@@ -68,7 +68,7 @@ try:
 except:
     import pickle
 
-version = '2.7-002'
+version = '2.7-003'
 
 params = {}
 
@@ -1184,8 +1184,8 @@ www.asliceofraspberrypi.co.uk\n\
         """ Update Start\Stop\Step parameters on Start\Stop frequency change """
         stop = self.fconv(self.fstop.get())
         # maximum permissible frequency is 'crystal clock / 2'
-        if stop > 62500000:
-            stop = 62500000
+        if stop > self.dds.maxfreq():
+            stop = self.dds.maxfreq()
             self.fstop.set(stop)
         if self.autostep.get():
             # fill step field with suitable value
