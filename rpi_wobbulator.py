@@ -588,7 +588,7 @@ class WobbyPi():
 - bits per sample\n\
 \nColour: [ R M Y G B ]\n\
 - colour used to display trace\n\
-  Red Magenta Green Yellow Blue\n\
+  Red Magenta Yellow Green Blue\n\
 \nOptions:\n\
 [Gr]  - Graticule display\n\
 [Cls] - Clear display at sweep start\n\
