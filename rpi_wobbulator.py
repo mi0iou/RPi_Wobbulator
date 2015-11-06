@@ -2106,8 +2106,7 @@ www.asliceofraspberrypi.co.uk\n\
                                                         ("postscript", "*.ps"),
                                                         ("PostScript", "*.PS"),
                                                         ("All files", "*.*"))
-        filename = filedialog.asksaveasfilename(defaultextension='.pdf',
-                                                        title=ttl, filetypes=ft)
+        filename = filedialog.asksaveasfilename(title=ttl, filetypes=ft)
         if filename:
             fname, fext = os.path.splitext(filename)
             if fext.upper() == '.PDF':
