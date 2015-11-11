@@ -1678,7 +1678,7 @@ www.asliceofraspberrypi.co.uk\n\
         if (self.sweep_start_reqd or (self._imm_startfreq != startfreq) or
                                         (self._imm_stopfreq != stopfreq) or
                                             (self._imm_stepfreq != stepfreq)):
-            if (startfreq > stopfreq) or (stepfreq < 1) or (stopfreq > 62500000):
+            if (startfreq > stopfreq) or (stepfreq < 1) or (stopfreq > self.dds.maxfreq()):
                 self.invalid_sweep('The frequency selection settings are invalid')
                 return
             # immutable variables, may not change during a sweep
