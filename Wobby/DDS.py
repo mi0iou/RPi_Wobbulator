@@ -142,7 +142,7 @@ class DDS:
         """
         Return maximum frequency capability (square wave output)
         """
-        return _DDS_SYS_CLK / 2
+        return int(self._dds_sys_clk / 2)
 
     def powerdown(self):
         """
