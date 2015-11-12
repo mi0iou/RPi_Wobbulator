@@ -27,7 +27,7 @@ API Library Module for accessing the MI0IOU RPi Wobbulator board DDS.
 These Methods interface to the following device hardware:
 
 *   EIModule (http://www.eimodule.com) Signal Generator Module populated
-    with Analogue Devices(tm) AD9850 Direct Digital Synthesizer.
+    with Analogue Devices(tm) AD9850\AD9851 Direct Digital Synthesizer.
 """
 
 # import GPIO module
@@ -46,26 +46,31 @@ _DDS_DATA = 18
 # Master Reset
 _DDS_RESET = 22
 
-# AD9850 DDS system clock frequency in HZ (assumes 125MHz xtal)
-_DDS_SYS_CLK = 125000000
-
-# AD9851 DDS system clock frequency in HZ
-# (assumes 30MHz xtal * 6 clock multiplier)
-# _DDS_SYS_CLK = 180000000
-
-# program doubleword = frequency * (2^32 / xtal clock)
-_DDS_K_FACTOR = (4294967296 / _DDS_SYS_CLK)
+class DDSException(Exception):
+    pass
 
 class DDS:
 
     # Serial Number
     _sernum = 20140707
 
-    # Version 0 Revision 4
-    _vernum = 0.5
+    # Version 0 Revision 6
+    _vernum = 0.6
 
     # FIXME: specify supported hardware
     # EIModule ADS9850 Signal Generator Module http://www.eimodule.com
+    # ???????? ADS9851 Signal Generator Module
+
+    # AD9851 DDS clock multiplier
+    # Default to disabled\no multiplier (AD9850 DDS)
+    _dds_mult = 0
+
+    # AD985X System Clock in Hz (Xtal Reference Clock * Multiplier)
+    # Default to 125MHz xtal, no clock multiplier (AD9850 DDS)
+    _dds_sys_clk = 125000000
+
+    # program doubleword = frequency * (2^32 / system clock)
+    _dds_k_factor = (4294967296 / _dds_sys_clk)
 
     # built-in initialisation method
     def __init__(self):
@@ -90,9 +95,11 @@ class DDS:
         GPIO.setup(_DDS_RESET, GPIO.OUT)
         GPIO.output(_DDS_RESET, False)
 
-        self._pulse_high(_DDS_RESET)
-        self._pulse_high(_DDS_W_CLK)
-        self._pulse_high(_DDS_FQ_UD)
+        self.reset()
+        self.powerdown()
+
+        # Default to AD9850 DDS (125MHz xtal, no multiplier)
+        self.set_sysclk(125000000, 0)
 
     def version(self):
         """
@@ -126,16 +133,31 @@ class DDS:
         """
         Program the AD9850 DDS to output the specified wave.
         """
-        freq = int(freq * _DDS_K_FACTOR)
+        freq = int(freq * self._dds_k_factor)
         for b in range (0, 4):
             self._writeb(freq & 0xFF)
             freq = freq >> 8
         phase = (phase << 3) & 0xF8
         # AD9850 NOTE: the two least significant bits MUST ALWAYS be zero
-        # AD9851 set the reference clock multiplier bit (30MHz x 6)
-        # phase = phase | 0x01
+        # AD9851 set the reference clock multiplier, bit 0 (30MHz x 6)
+        phase = phase | self._dds_mult
         self._writeb(phase)
         self._pulse_high(_DDS_FQ_UD)
+        return
+
+    def set_sysclk(self, freq = 125000000, mult = 0):
+        """
+        Calculate\store AD985X System Clock & Multiplier flag related parameters.
+        """
+        self._dds_mult = mult
+        if self._dds_mult == 0:
+            self._dds_sys_clk = freq
+        elif self._dds_mult == 1:
+            self._dds_sys_clk = freq * 6
+        else:
+            raise DDSException("Parameter 2 (multiplier flag) out of range")
+
+        self._dds_k_factor = (4294967296 / self._dds_sys_clk)
         return
 
     def maxfreq(self):
