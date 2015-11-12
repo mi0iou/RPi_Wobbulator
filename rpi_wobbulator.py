@@ -218,9 +218,11 @@ class WobbyPi():
         # other design changes
         # VR1, R4, C5, C7, D1, D2, R4  <> replace voltage doubler circuitry for
         # peak voltage detector [improve channel 1 sensitivity and dynamic range]
+        # R12 <> replaced with shorting link [improve square wave output]
+        # R5 removed <> output impedance [device under test is the load]
+        # R6 <> NOT changed [changes output current capability]
 
-        # setup working parameters
-
+        # Working Parameters Setup
         # The Wobbulator AD8307 LogAmp has a dynamic range of 92dB, extending
         # from -75dBm to +17dBm when used without an input matching network.
         # So the 'Intercept' (0 Volt output) is at -75 dBm.
@@ -254,12 +256,13 @@ class WobbyPi():
         # the AD8307 LogAmp when operating from a 3V supply is +10dBm (sine
         # amplitude of ±1 V) +16dBm could have been handled using a 5V supply.
         # The Wobbulator AD9850 DDS Module has a maximum output of
-        # approximately -8 dBm.
+        # approximately -8 dBm when supplied with 3.3v.
         # Selected a end scale of +10dBm giving 60dB range for a -50dBm start.
         dBm_end = 10
 
         # The Wobbulator AD8307 LogAmp Slope 'Volts per dBm' is calibrated
         # by VR2, the approxmate adjustment range is from 11mV to 22mV.
+        # Selected 20mV.
         self.VdBm = 0.02
 
         #self.VdBm_bias = abs(self.dBm_start - self.dBm_offset) * self.VdBm
