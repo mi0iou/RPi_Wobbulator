@@ -55,11 +55,17 @@ import math
 
 # import GUI module
 from tkinter import *
+from tkinter import messagebox
+from tkinter import colorchooser
+from tkinter import filedialog
+from tkinter import simpledialog
+
 from copy import deepcopy
 
 import tempfile
 import subprocess
 import os
+
 
 # ---- get user preferences or set defaults ----
 # for param file persistence, import faster cPickle if available
@@ -68,7 +74,7 @@ try:
 except:
     import pickle
 
-version = '2.7-003'
+version = '2.7-004'
 
 params = {}
 
@@ -96,8 +102,9 @@ def default_parameters():
     params['cls'] = 0
     params['grid'] = 1
     params['bits'] = 16
+    params['ddsclk'] = 125000000
+    params['ddsmul'] = 0
 
-# user parameters
 paramFN = 'wobbypi.pkl'
 try:
     paramFile = open(paramFN,"rb")
@@ -107,25 +114,23 @@ else:
     try:
         params = pickle.load(paramFile)
     except EOFError:
+        print('Parameter File Error: Corrupted')
         default_parameters()
     finally:
         paramFile.close()
 
+    """
     try:
         if params['version'] != version:
             raise
     except:
         default_parameters()
+    """
+    if params['version'] != version:
+        print('Parameter File Error: Incorrect Version')
+        default_parameters()
+
 # print (params)
-
-# ---- end of user param support ----
-
-# ---- for app menus and associated displays ----
-from tkinter import messagebox
-from tkinter import colorchooser
-from tkinter import filedialog
-from tkinter import simpledialog
-# ---- end of menu support ----
 
 
 # Class definition for WobbyPi application
@@ -209,7 +214,8 @@ class WobbyPi():
         self.fBegin = params['fBegin']
         self.fEnd = params['fEnd']
         self.fIntvl = params['fIntvl']
-
+        self.ddsclkfreq = params['ddsclk']
+        self.ddsclkmul = params['ddsmul']
 
         # trivial design changes
         # C2 + C3 1nF <> 100nF [drop channel 2 input 3dB corner frequency to 30kHz]
@@ -560,6 +566,8 @@ class WobbyPi():
         opt.add_separator()
         opt.add_command(label = 'Calibrate dBm', command = self.calibrate,
                                                                 underline = 0)
+        opt.add_command(label = 'Hardware Config', command = self.hwconfig,
+                                                                underline = 0)
         opt.add_separator()
         opt.add_command(label = 'Save settings', command = self.save_params,
                                                                 underline = 0)
@@ -574,7 +582,8 @@ class WobbyPi():
         m_file.entryconfig(2, state = DISABLED)
         if not _has_wobbulator:
             opt.entryconfig(9, state = DISABLED)
-        # It doesn't work, disable for now
+            opt.entryconfig(10, state = DISABLED)
+        # Calibration doesn't work, disable for now
         opt.entryconfig(9, state = DISABLED)
 
     def not_done(self):
@@ -731,6 +740,25 @@ www.asliceofraspberrypi.co.uk\n\
                 self.yDivs1 = yDivs
         return
 
+    def hwconfig(self):
+        #msg = 'Not Yet Implemented'
+        #messagebox.showinfo('Wobbulator Configuration', msg)
+        ddsclkfreq = simpledialog.askinteger('DDS', 'Xtal Freq (Hz)',
+                                        initialvalue = params['ddsclk'],
+                                        minvalue = 0, maxvalue = 125000000)
+        if ddsclkfreq != 'None':
+            self.ddsclkfreq = ddsclkfreq
+
+        ddsclkmul = simpledialog.askinteger('DDS', 'Clock x 6 multiplier (0 or 1)',
+                                        initialvalue = params['ddsmul'],
+                                        minvalue = 0, maxvalue = 1)
+        if ddsclkmul != 'None':
+            self.ddsclkmul = ddsclkmul
+
+        if _has_wobbulator:
+            self.dds.set_sysclk(self.ddsclkfreq, self.ddsclkmul)
+        return
+
     def save_params(self):
         global params
         params['version'] = version
@@ -755,6 +783,8 @@ www.asliceofraspberrypi.co.uk\n\
         params['cls'] = str(self.cls.get())
         params['grid'] = str(self.graticule.get())
         params['bits'] = str(self.bitres.get())
+        params['ddsclk'] = self.ddsclkfreq
+        params['ddsmul'] = self.ddsclkmul
 
         with open(paramFN, "wb") as paramFile:
             try:
@@ -858,6 +888,7 @@ www.asliceofraspberrypi.co.uk\n\
             self.ipchan_update()
             self.gain_update()
             self.bitres_update()
+            self.dds.set_sysclk(self.ddsclkfreq, self.ddsclkmul)
         else:
             self.b_action.config(state = DISABLED)
             self.b_sweep.config(state = DISABLED)
