@@ -221,12 +221,12 @@ class WobbyPi():
         # C2 + C3 1nF <> 100nF [drop channel 2 input 3dB corner frequency to 30kHz]
         # C9 <> add 1M Ohm parallel resistor [improve channel 1 decay slew rate]
         # IC1 Pin4 <> add 100nF to ground [improve sampling & reduce noise injection]
-        # other design changes
-        # VR1, R4, C5, C7, D1, D2, R4  <> replace voltage doubler circuitry for
-        # peak voltage detector [improve channel 1 sensitivity and dynamic range]
         # R12 <> replaced with shorting link [improve square wave output]
         # R5 removed <> output impedance [device under test is the load]
-        # R6 <> NOT changed [changes output current capability]
+        # other potential design changes
+        # VR1, R4, C5, C7, D1, D2, R4  <> replace voltage doubler circuitry for
+        # peak voltage detector [improve channel 1 sensitivity and dynamic range]
+        # R6 <> increase output drive [increased DUT dynamic range]
 
         # Working Parameters Setup
         # The Wobbulator AD8307 LogAmp has a dynamic range of 92dB, extending
