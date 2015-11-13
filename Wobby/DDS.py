@@ -132,7 +132,7 @@ class DDS:
 
     def set_wave(self, freq = 0, phase = 0):
         """
-        Program the AD985X DDS to output the specified wave.
+        Program the AD985X DDS to output the specified frequency.
         """
         freq = int(freq * self._dds_k_factor)
         for b in range (0, 4):
@@ -146,15 +146,15 @@ class DDS:
         self._pulse_high(_DDS_FQ_UD)
         return
 
-    def set_sysclk(self, freq = 125000000, mult = 0):
+    def set_sysclk(self, refclk = 125000000, mult = 0):
         """
-        Calculate\store AD985X System Clock & Multiplier flag related parameters.
+        Calculate\store AD985X System Clock, Multiplier flag & related parameters.
         """
         self._dds_mult = mult
         if self._dds_mult == 0:
-            self._dds_sys_clk = freq
+            self._dds_sys_clk = refclk
         elif self._dds_mult == 1:
-            self._dds_sys_clk = freq * 6
+            self._dds_sys_clk = refclk * 6
         else:
             self.exit()
             raise DDSException("Parameter 2 (multiplier flag) out of range")
@@ -207,7 +207,7 @@ def main():
 
     -h/--help           list all options
     -v/--verbose        run tests in verbose mode with output to stdout
-    -s/--summary            Module documentation summary
+    -s/--summary        Module documentation summary
     """
     import os
     import sys
