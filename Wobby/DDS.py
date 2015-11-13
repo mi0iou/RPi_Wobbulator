@@ -82,6 +82,7 @@ class DDS:
         self._lock = WobbyLock('DDS')
 
         # setup GPIO
+        print("Using installed GPIO version " + str(GPIO.VERSION))
         GPIO.setmode(GPIO.BOARD)
         GPIO.setwarnings(False)
 
