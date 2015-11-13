@@ -419,7 +419,7 @@ class WobbyPi():
         e_desc = Entry(frame, width = 66, textvariable = self.desc)
         e_desc.grid(row = 7, column = 1, columnspan = 4)
         e_desc.bind('<Key-Return>', self.desc_update)
-        e_desc.insert(0, 'Mouse (Left-Click)\(Right-Click-And-Move) on sweep trace')
+        e_desc.insert(0, 'Mouse (Left-Click)\(Right-Click-Hold-And-Move) on sweep trace')
         self.desc_update()
 
         # frequency entries
