@@ -120,7 +120,7 @@ class DDS:
 
     def _writeb(self, data):
         """
-        Write a byte to the AD9850 DDS serially.
+        Write a byte to the AD985X DDS serially.
 
         Internal Method.
         """
@@ -132,7 +132,7 @@ class DDS:
 
     def set_wave(self, freq = 0, phase = 0):
         """
-        Program the AD9850 DDS to output the specified wave.
+        Program the AD985X DDS to output the specified wave.
         """
         freq = int(freq * self._dds_k_factor)
         for b in range (0, 4):
@@ -170,7 +170,7 @@ class DDS:
 
     def powerdown(self):
         """
-        Power down the AD9850.
+        Power down the AD985X.
         """
         for b in range (0, 4):
             self._writeb(0)
@@ -180,7 +180,7 @@ class DDS:
 
     def reset(self):
         """
-        Reset the AD9850 DDS registers (disables the output waveform).
+        Reset the AD985X DDS registers (disables the output waveform).
         """
         self._pulse_high(_DDS_RESET)
         self._pulse_high(_DDS_W_CLK)
