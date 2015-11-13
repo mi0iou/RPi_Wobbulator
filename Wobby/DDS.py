@@ -156,6 +156,7 @@ class DDS:
         elif self._dds_mult == 1:
             self._dds_sys_clk = freq * 6
         else:
+            self.exit()
             raise DDSException("Parameter 2 (multiplier flag) out of range")
 
         self._dds_k_factor = (4294967296 / self._dds_sys_clk)
@@ -189,9 +190,12 @@ class DDS:
     def exit(self):
         """
         Shut down the hardware and free all resources.
+
+        Ensure this function is always invoked at program exit under all conditions.
         """
         self.reset()
         self.powerdown()
+        GPIO.cleanup()
         self._lock.release()
         return
 
