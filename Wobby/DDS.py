@@ -163,7 +163,7 @@ class DDS:
 
     def maxfreq(self):
         """
-        Return maximum frequency capability (square wave output)
+        Return maximum frequency capability (square wave output).
         """
         return int(self._dds_sys_clk / 2)
 
