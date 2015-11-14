@@ -47,6 +47,11 @@ WIP: Add __main__ with basic test routine
 
 Wobby/ADC.py
 ~~~~~~~~~~~~~~
+read_callback_cancel(self) docstring
+exit(self) docstring
+ensure exit(self) does as required and is called where appropriate
+
+
 WIP: Add __main__ with basic test routine
 
 DONE: rename the 'simple' write to 'raw_write',
