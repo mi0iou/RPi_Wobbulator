@@ -2215,18 +2215,20 @@ else:
 
 if not _has_wobbulator:
     print("RPi Wobbulator not detected")
+
 # Assign TK to root
 root = Tk()
 # Set main window title and menubar
 root.wm_title('RPi Wobbulator ' + version)
-# Create instance of class WobbyPi
-app = WobbyPi(root, params)
-app.makemenu(root)
-app.initialise()
-# Start main loop and wait for input from GUI
-root.mainloop()
-
-if _has_wobbulator:
-    # tell the library modules to clean up
-    app.dds.exit()
-    app.adc.exit()
+try:
+    # Create instance of class WobbyPi
+    app = WobbyPi(root, params)
+    app.makemenu(root)
+    app.initialise()
+    # Start main loop and wait for input from GUI
+    root.mainloop()
+finally:
+    if _has_wobbulator:
+        # tell the library modules to clean up
+        app.dds.exit()
+        app.adc.exit()
