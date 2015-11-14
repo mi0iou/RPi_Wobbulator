@@ -83,19 +83,15 @@ class DDS:
 
         # setup GPIO
         print("Using installed GPIO version " + str(GPIO.VERSION))
+
         GPIO.setmode(GPIO.BOARD)
         GPIO.setwarnings(False)
 
         # setup IO bits & initialize to zero
-        GPIO.setup(_DDS_W_CLK, GPIO.OUT)
-        GPIO.output(_DDS_W_CLK, False)
-        GPIO.setup(_DDS_FQ_UD, GPIO.OUT)
-        GPIO.output(_DDS_FQ_UD, False)
-        GPIO.setup(_DDS_DATA, GPIO.OUT)
-        GPIO.output(_DDS_DATA, False)
-        GPIO.setup(_DDS_RESET, GPIO.OUT)
-        GPIO.output(_DDS_RESET, False)
+        dds_gpio = [_DDS_W_CLK, _DDS_FQ_UD, _DDS_DATA, _DDS_RESET]
+        GPIO.setup(dds_gpio, GPIO.OUT, initial = GPIO.LOW)
 
+        # Ensure DDS in sane state and put to sleep
         self.reset()
         self.powerdown()
 
@@ -114,8 +110,8 @@ class DDS:
 
         Internal Method.
         """
-        GPIO.output(pin, True)
-        GPIO.output(pin, False)
+        GPIO.output(pin, GPIO.HIGH)
+        GPIO.output(pin, GPIO.LOW)
         return
 
     def _writeb(self, data):
