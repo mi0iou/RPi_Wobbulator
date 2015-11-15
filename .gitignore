@@ -4,3 +4,5 @@
 *.swp
 # python cache files
 Wobby/__pycache__
+# python compiled bytecode files
+*.pyc
