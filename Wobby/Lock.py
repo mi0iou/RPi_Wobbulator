@@ -46,7 +46,7 @@ class Lock:
             fp = open(lockfile, 'r+')
         except:
             try:
-                # Open a lockfile 'create\append' 
+                # Open a lockfile 'create\append'
                 fp = open(lockfile, 'a+')
             except:
                 raise LockError("Failure to open lockfile {}".format(fp.name))

@@ -33,7 +33,7 @@ These Methods interface to the following device hardware:
 #import quick2wire i2c module
 import quick2wire.i2c as i2c
 
-from Wobby.lock import Lock as WobbyLock
+from Wobby.Lock import Lock as WobbyLock
 
 _PROGRAM_ERROR_MESSAGE = 'A Program Error has occurred, please report this bug'
 

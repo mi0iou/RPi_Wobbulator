@@ -33,7 +33,7 @@ These Methods interface to the following device hardware:
 # import GPIO module
 import RPi.GPIO as GPIO
 
-from Wobby.lock import Lock as WobbyLock
+from Wobby.Lock import Lock as WobbyLock
 
 # Define GPIO pins
 
