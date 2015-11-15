@@ -69,6 +69,10 @@ Add method to support ADC in continous conversion mode:
 
     Does (the) python (User) favour any particular one of these strategies ?
 
+Wobby/Lock.py
+~~~~~~~~~~~~~
+Add __main__ with basic test routine
+
 
 RPi_SignalGen
 ~~~~~~~~~~~~~
