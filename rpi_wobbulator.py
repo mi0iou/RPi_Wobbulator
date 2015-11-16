@@ -500,39 +500,6 @@ class WobbyPi():
         self._colour_mrd_bind = {0:self.mrd_red, 1:self.mrd_magenta,
                         2:self.mrd_yellow, 3:self.mrd_green, 4:self.mrd_blue}
 
-    def dBm_validate(self):
-        # FIXME: finish me
-        msg = ""
-        if self.VdBm <= 0.01 or self.VdBm >= 0.023:
-            msg = 'ERROR: Out of range (VdBm {})'.format(self.VdBm)
-        if self.dBm_start < -65:
-            msg += 'ERROR: Out of range (dBm_start {})'.format(self.dBm_start)
-        if self.dBm_start + self.dBm_range > 10:
-            msg += 'ERROR: Out of range (dBm_start {}, dBm_range {})'.format(
-                                                self.dBm_start, self.dBm_range)
-        if self.VdBm_bias <= 0.2:
-            msg = 'ERROR: Out of range (VdBm_bias {})'.format(self.VdBm_bias)
-        if self.dBm_offset != -75:
-            msg = 'ERROR: Out of range (dBm_offset {})'.format(self.dBm_offset)
-        if msg:
-            print(msg)
-            sys.exit()
-
-        #msg = 'VdBm {}, dBm_scale {}, dBm_start {}, dBm_range {}'.format(
-        #            self.VdBm, self.dBm_scale, self.dBm_start, self.dBm_range)
-        #print(msg)
-
-    def roundup(self, dividend, divisor):
-        if dividend % divisor != 0:
-            dividend += divisor - dividend % divisor
-        return dividend
-
-    def gcd(self, x, y):
-        """ Euclidean Algorithm to find the greatest common divisor """
-        while y:
-            x, y = y, x % y
-        return x
-
     def makemenu(self, win):
         global root
         top = Menu(win)
@@ -585,6 +552,78 @@ class WobbyPi():
             opt.entryconfig(10, state = DISABLED)
         # Calibration doesn't work, disable for now
         opt.entryconfig(9, state = DISABLED)
+        return
+
+    def initialise(self):
+        """ Initialise variables, buffers, and state """
+        # Synchronise Hardware & GUI state\appearance
+        if _has_wobbulator:
+            self.ipchan_update()
+            self.gain_update()
+            self.bitres_update()
+            self.dds.set_sysclk(self.ddsclkfreq, self.ddsclkmul)
+        else:
+            self.b_action.config(state = DISABLED)
+            self.b_sweep.config(state = DISABLED)
+            self.b_reset.config(state = DISABLED)
+            self.reflect_save_state(False)
+            # FIXME: unsatisfactory duplication here
+            if self.ipchan.get() == 2:
+                self.chrtHt = self.chrtHt2
+                self.yDivs = self.yDivs2
+            else:
+                self.chrtHt = self.chrtHt1
+                self.yDivs = self.yDivs1
+            self.set_subDivs()
+        self.fresh_canvas()
+        self.colour_sync()
+        self.sweep_start_reqd = True
+        self.memstore_reset()
+        # <MouseWheel> = <Button-4> and <Button-5>#
+
+        for key, val in self._colour_mld_bind.items():
+            tag = 'p_' + self._colour_option[key]
+            canvas.tag_bind(tag, "<1>", val)
+            canvas.tag_bind(tag, "<B1-ButtonRelease>", self.mlu_common)
+        for key, val in self._colour_mrd_bind.items():
+            tag = 'p_' + self._colour_option[key]
+            canvas.tag_bind(tag, "<3>", val)
+            canvas.tag_bind(tag, "<B3-Motion>", self.mrd_movement)
+            canvas.tag_bind(tag, "<B3-ButtonRelease>", self.mru_common)
+        return
+
+    def dBm_validate(self):
+        # FIXME: finish me
+        msg = ""
+        if self.VdBm <= 0.01 or self.VdBm >= 0.023:
+            msg = 'ERROR: Out of range (VdBm {})'.format(self.VdBm)
+        if self.dBm_start < -65:
+            msg += 'ERROR: Out of range (dBm_start {})'.format(self.dBm_start)
+        if self.dBm_start + self.dBm_range > 10:
+            msg += 'ERROR: Out of range (dBm_start {}, dBm_range {})'.format(
+                                                self.dBm_start, self.dBm_range)
+        if self.VdBm_bias <= 0.2:
+            msg = 'ERROR: Out of range (VdBm_bias {})'.format(self.VdBm_bias)
+        if self.dBm_offset != -75:
+            msg = 'ERROR: Out of range (dBm_offset {})'.format(self.dBm_offset)
+        if msg:
+            print(msg)
+            sys.exit()
+
+        #msg = 'VdBm {}, dBm_scale {}, dBm_start {}, dBm_range {}'.format(
+        #            self.VdBm, self.dBm_scale, self.dBm_start, self.dBm_range)
+        #print(msg)
+
+    def roundup(self, dividend, divisor):
+        if dividend % divisor != 0:
+            dividend += divisor - dividend % divisor
+        return dividend
+
+    def gcd(self, x, y):
+        """ Euclidean Algorithm to find the greatest common divisor """
+        while y:
+            x, y = y, x % y
+        return x
 
     def not_done(self):
         messagebox.showerror('Not implemented', 'Not yet available')
@@ -879,44 +918,6 @@ www.asliceofraspberrypi.co.uk\n\
     def exit(self):
         """ exit, tidy up after GUI destruction """
         root.destroy()
-        return
-
-    def initialise(self):
-        """ Initialise variables, buffers, and state """
-        # Synchronise Hardware & GUI state\appearance
-        if _has_wobbulator:
-            self.ipchan_update()
-            self.gain_update()
-            self.bitres_update()
-            self.dds.set_sysclk(self.ddsclkfreq, self.ddsclkmul)
-        else:
-            self.b_action.config(state = DISABLED)
-            self.b_sweep.config(state = DISABLED)
-            self.b_reset.config(state = DISABLED)
-            self.reflect_save_state(False)
-            # FIXME: unsatisfactory duplication here
-            if self.ipchan.get() == 2:
-                self.chrtHt = self.chrtHt2
-                self.yDivs = self.yDivs2
-            else:
-                self.chrtHt = self.chrtHt1
-                self.yDivs = self.yDivs1
-            self.set_subDivs()
-        self.fresh_canvas()
-        self.colour_sync()
-        self.sweep_start_reqd = True
-        self.memstore_reset()
-        # <MouseWheel> = <Button-4> and <Button-5>#
-
-        for key, val in self._colour_mld_bind.items():
-            tag = 'p_' + self._colour_option[key]
-            canvas.tag_bind(tag, "<1>", val)
-            canvas.tag_bind(tag, "<B1-ButtonRelease>", self.mlu_common)
-        for key, val in self._colour_mrd_bind.items():
-            tag = 'p_' + self._colour_option[key]
-            canvas.tag_bind(tag, "<3>", val)
-            canvas.tag_bind(tag, "<B3-Motion>", self.mrd_movement)
-            canvas.tag_bind(tag, "<B3-ButtonRelease>", self.mru_common)
         return
 
     def marker_label(self, event):
