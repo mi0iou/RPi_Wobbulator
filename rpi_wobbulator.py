@@ -2202,7 +2202,7 @@ www.asliceofraspberrypi.co.uk\n\
             return False
         return True
 
-# Check for presence of RPi Wobbulator on i2c bus
+# Check for presence of RPi Wobbulator ADC on i2c bus
 _has_wobbulator = False
 try:
     i2c_op = str(subprocess.check_output(('i2cdetect', '-y', '1')))
@@ -2221,9 +2221,11 @@ if not _has_wobbulator:
 root = Tk()
 # Set main window title and menubar
 root.wm_title('RPi Wobbulator ' + version)
+# Create instance of class WobbyPi
+# this instantiates the DDS and ADC modules which
+# from this point will require cleaning up on exit
+app = WobbyPi(root, params)
 try:
-    # Create instance of class WobbyPi
-    app = WobbyPi(root, params)
     app.makemenu(root)
     app.initialise()
     # Start main loop and wait for input from GUI
