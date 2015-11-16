@@ -29,6 +29,7 @@ class LockError(Exception):
 class Lock:
 
     _fp = None
+    _name = None
 
     def __init__(self, lockdevice):
         """ Immediately lock when possible """
@@ -65,14 +66,19 @@ class Lock:
         else:
             # got the lock
             self._fp = fp
+            self._name = fp.name
             # write our pid
             fp.write(" {}\n".format(os.getpid()))
             fp.truncate()
             fp.flush()
             # hold open to keep the lock
+        return
 
     def release(self):
         if self._fp is not None:
             self._fp.close()
             self._fp = None
+            os.unlink(self._name)
+            print("Lock released: " + self._name)
+        return
 
