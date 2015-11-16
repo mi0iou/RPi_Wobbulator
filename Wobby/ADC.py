@@ -112,25 +112,16 @@ class ADC:
     
     # I2C address of ADC chip
     _adc_address = 0x68
-
     _adc_gain = 1
-    
     _adc_bitres = 18
-
     _adc_sps = 0
-
     _adc_contconv = 0
-    
     _adc_ipchan = 1
-
     _adc_config = 0 + 12 + 0 + 0 + 128
-
     _adc_delay = 235
 
     _callback = ()
-
     _callback_id = None
-
     _master = None
 
     def __init__(self, master = None):
@@ -146,6 +137,7 @@ class ADC:
 
         # prepare i2c bus
         self._bus = i2c.I2CMaster()
+        return
 
     def version(self):
         """
@@ -482,6 +474,7 @@ class ADC:
             if self._callback_id != -1:
                 self._master.after_cancel(self._callback_id)
             self._callback_id = None
+        return
 
     def read(self, callback = None):
         """
@@ -554,6 +547,8 @@ class ADC:
         """
         self.read_callback_cancel()
         self._lock.release()
+        print("RPiWobbulator ADC API Library Module exiting")
+        return
 
 def main():
     """
