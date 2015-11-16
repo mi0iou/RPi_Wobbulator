@@ -48,7 +48,7 @@ class ADC:
     # FIXME: report supported hardware
     """
     MCP3424 18-Bit, Multi-Channel Analog-to-Digital Converter
-    with I2C Interface and On-Board Reference
+    with I2C Interface and On-Board Reference.
     """
 
     # Configuration Contol Byte Bit Mappings
@@ -392,7 +392,8 @@ class ADC:
 
     def _read_bytes4(self):
         """
-        Read 4 bytes (18 Bit resolution conversion and status byte)
+        Read 4 bytes (18 Bit resolution conversion and status byte).
+
         Return: integer value
         """
         h, m, l ,s = self._bus.transaction(i2c.reading(
@@ -409,7 +410,8 @@ class ADC:
 
     def _read_bytes3(self):
         """
-        Read 3 bytes (16, 14, 12 Bit resolution conversion and status byte)
+        Read 3 bytes (16, 14, 12 Bit resolution conversion and status byte).
+
         Return: integer value
         """
         m, l ,s = self._bus.transaction(i2c.reading(
@@ -426,7 +428,8 @@ class ADC:
 
     def _read_18(self):
         """
-        Convert 18 Bit resolution conversion to volts
+        Convert 18 Bit resolution conversion to volts.
+
         Return: float value
         """
         v = (self._read_bytes4()/64000)
@@ -437,7 +440,8 @@ class ADC:
 
     def _read_16(self):
         """
-        Convert 16 Bit resolution conversion to volts
+        Convert 16 Bit resolution conversion to volts.
+
         Return: float value
         """
         v = (self._read_bytes3()/16000)
@@ -448,7 +452,8 @@ class ADC:
 
     def _read_14(self):
         """
-        Convert 14 Bit resolution conversion to volts
+        Convert 14 Bit resolution conversion to volts.
+
         Return: float value
         """
         v = (self._read_bytes3()/4000)
@@ -459,7 +464,8 @@ class ADC:
 
     def _read_12(self):
         """
-        Convert 12 Bit resolution conversion to volts
+        Convert 12 Bit resolution conversion to volts.
+
         Return: float value
         """
         v = (self._read_bytes3()/1000)
@@ -469,6 +475,9 @@ class ADC:
         return v
 
     def read_callback_cancel(self):
+        """
+        Cancel any scheduled callback.
+        """
         if self._callback_id != None:
             if self._callback_id != -1:
                 self._master.after_cancel(self._callback_id)
