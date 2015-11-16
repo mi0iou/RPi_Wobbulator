@@ -30,10 +30,6 @@ These Methods interface to the following device hardware:
     with Analogue Devices(tm) AD9850\AD9851 Direct Digital Synthesizer.
 """
 
-# import GPIO module
-import RPi.GPIO as GPIO
-
-from Wobby.Lock import Lock as WobbyLock
 
 # Define GPIO pins
 
@@ -77,6 +73,18 @@ class DDS:
 
         print("RPiWobbulator DDS API Library Module Version " +
                                                         str(self._vernum))
+        global GPIO
+        # import GPIO module
+        try:
+            import RPi.GPIO as GPIO
+        except:
+            raise DDSException("Error during RPi.GPIO import\n")
+
+        try:
+            # Wobby.Lock is not in the default python module path
+            from Wobby.Lock import Lock as WobbyLock
+        except:
+            raise DDSException("Error during Wobby.Lock import\n")
 
         # obtain lock for DDS
         self._lock = WobbyLock('DDS')
