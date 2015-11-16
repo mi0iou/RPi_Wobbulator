@@ -30,20 +30,19 @@ These Methods interface to the following device hardware:
     with I2C Interface and On-Board Reference.
 """
 
-#import quick2wire i2c module
-import quick2wire.i2c as i2c
-
-from Wobby.Lock import Lock as WobbyLock
 
 _PROGRAM_ERROR_MESSAGE = 'A Program Error has occurred, please report this bug'
+
+class ADCException(Exception):
+    pass
 
 class ADC:
 
     # Serial Number
     _sernum = 20140701
 
-    # Version 0 Revision 5
-    _vernum = 0.5
+    # Version 0 Revision 6
+    _vernum = 0.6
 
     # FIXME: report supported hardware
     """
@@ -130,6 +129,18 @@ class ADC:
         print("RPiWobbulator ADC API Library Module Version " + 
                                                         str(self._vernum))
 
+        global i2c
+        try:
+            #import quick2wire i2c module
+            import quick2wire.i2c as i2c
+        except:
+            raise ADCException("Error during quick2wire.i2c import\n")
+
+        try:
+            from Wobby.Lock import Lock as WobbyLock
+        except:
+            raise ADCException("Error during Wobby.Lock import\n")
+
         self._master = master
 
         # obtain lock for ADC
@@ -161,13 +172,13 @@ class ADC:
         if self._adc_bitres:
             sps_bitres = self._mapbitres[self._adc_bitres]
             if self._adc_sps:
-                raise Exception(_PROGRAM_ERROR_MESSAGE)
+                raise ADCException(_PROGRAM_ERROR_MESSAGE)
         elif self._adc_sps:
             sps_bitres = self._mapsps[self._adc_sps]
             if self._adc_bitres:
-                raise Exception(_PROGRAM_ERROR_MESSAGE)
+                raise ADCException(_PROGRAM_ERROR_MESSAGE)
         else:
-            raise Exception(_PROGRAM_ERROR_MESSAGE)
+            raise ADCException(_PROGRAM_ERROR_MESSAGE)
 
         contconv = self._mapcontconv[self._adc_contconv]
         ipchan = self._mapipchan[self._adc_ipchan]
@@ -512,7 +523,7 @@ class ADC:
                 elif (bitres == 12):
                     self._callback_id = self._master.after(self._adc_delay, self._read_12)
                 else:
-                    raise Exception(_PROGRAM_ERROR_MESSAGE)
+                    raise ADCException(_PROGRAM_ERROR_MESSAGE)
                 return
             else:
                 # no callback, block & spin
@@ -525,9 +536,10 @@ class ADC:
                 elif (bitres == 12):
                     return self._read_12()
                 else:
-                    raise Exception(_PROGRAM_ERROR_MESSAGE)
+                    raise ADCException(_PROGRAM_ERROR_MESSAGE)
         else:
-            raise Exception("Busy")
+            raise ADCException("Busy")
+        return
 
     # remove prefix underscore (and this comment) when complete,
     # should also provide a callback method.
@@ -539,7 +551,8 @@ class ADC:
         if _adc_contconv:
             pass 
         else:
-            raise Exception('ADC not in continuous conversion mode.')
+            raise ADCException('ADC not in continuous conversion mode.')
+        return
 
     def exit(self):
         """
