@@ -193,6 +193,7 @@ class DDS:
         self.powerdown()
         GPIO.cleanup()
         self._lock.release()
+        print("RPiWobbulator DDS API Library Module exiting")
         return
 
 def main():
