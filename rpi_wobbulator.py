@@ -157,7 +157,7 @@ class WobbyPi():
 
     _ipchan_option = {0:1, 1:2, 2:3, 3:4}
     _gain_option = {0:1, 1:2, 2:4, 3:8}
-    _bitres_option = {0:18, 1:16, 2:14, 3:12}
+    _bitres_option = {0:12, 1:14, 2:16, 3:18}
     _colour_option = {0:'red', 1:'magenta', 2:'yellow', 3:'green', 4:'blue'}
 
     _colour_button = {}
