@@ -158,7 +158,7 @@ class WobbyPi():
     _ipchan_option = {0:1, 1:2, 2:3, 3:4}
     _gain_option = {0:1, 1:2, 2:4, 3:8}
     _bitres_option = {0:12, 1:14, 2:16, 3:18}
-    _colour_option = {0:'red', 1:'magenta', 2:'yellow', 3:'green', 4:'blue'}
+    _colour_option = {0:'red', 1:'yellow', 2:'magenta', 3:'green', 4:'blue'}
 
     _colour_button = {}
     _colour_iterator = ()
@@ -495,10 +495,11 @@ class WobbyPi():
             cb_autostep.configure(state = 'disabled')
 
         canvas.update_idletasks()
-        self._colour_mld_bind = {0:self.mld_red, 1:self.mld_magenta,
-                        2:self.mld_yellow, 3:self.mld_green, 4:self.mld_blue}
-        self._colour_mrd_bind = {0:self.mrd_red, 1:self.mrd_magenta,
-                        2:self.mrd_yellow, 3:self.mrd_green, 4:self.mrd_blue}
+
+        self._colour_mld_bind = {0:self.mld_red, 1:self.mld_yellow,
+                        2:self.mld_magenta, 3:self.mld_green, 4:self.mld_blue}
+        self._colour_mrd_bind = {0:self.mrd_red, 1:self.mrd_yellow,
+                        2:self.mrd_magenta, 3:self.mrd_green, 4:self.mrd_blue}
 
     def makemenu(self, win):
         global root
@@ -637,9 +638,9 @@ class WobbyPi():
 - select input gain amplification\n\
 \nBPS: [ 18 16 14 12 ]\n\
 - bits per sample\n\
-\nColour: [ R M Y G B ]\n\
+\nColour: [ R Y M G B ]\n\
 - colour used to display trace\n\
-  Red Magenta Yellow Green Blue\n\
+  Red Yellow Magenta Green Blue\n\
 \nOptions:\n\
 [Gr]  - Graticule display\n\
 [Cls] - Clear display at sweep start\n\
@@ -1021,14 +1022,14 @@ www.asliceofraspberrypi.co.uk\n\
         self.mrd_common(event, 'red')
         return
 
-    def mrd_magenta(self, event):
-        """ Mouse Right Button Down on magenta trace"""
-        self.mrd_common(event, 'magenta')
-        return
-
     def mrd_yellow(self, event):
         """ Mouse Right Button Down on yellow trace"""
         self.mrd_common(event, 'yellow')
+        return
+
+    def mrd_magenta(self, event):
+        """ Mouse Right Button Down on magenta trace"""
+        self.mrd_common(event, 'magenta')
         return
 
     def mrd_green(self, event):
