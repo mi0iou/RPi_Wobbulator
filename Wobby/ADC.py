@@ -41,8 +41,8 @@ class ADC:
     # Serial Number
     _sernum = 20140701
 
-    # Version 0 Revision 6
-    _vernum = 0.6
+    # Version 1 Revision 0
+    _vernum = 1.0
 
     # FIXME: report supported hardware
     """
@@ -53,15 +53,7 @@ class ADC:
     # Configuration Contol Byte Bit Mappings
 
     # PGA Gain Bits 0-1
-    """
-    # FIXME: use me or loose me
-    _ADC_GAIN_1 = 0
-    _ADC_GAIN_2 = 1
-    _ADC_GAIN_4 = 2
-    _ADC_GAIN_8 = 3
-    """
     _mapgain = { 1:0, 2:1, 4:2, 8:3, }
-
 
     # Bit Resolution\Samples Per Second Bits 2-3
     # 12 bits : 240 SPS  : 4.16 nS
@@ -69,85 +61,100 @@ class ADC:
     # 16 bits : 15 SPS   : 66.66 nS
     # 18 bits : 3.75 SPS : 266.66 nS
 
-    """
-    # FIXME: use me or loose me
-    _ADC_BITRES_12 = 0
-    _ADC_BITRES_14 = 4
-    _ADC_BITRES_16 = 8
-    _ADC_BITRES_18 = 12
-    """
     _mapbitres = { 12:0, 14:4, 16:8, 18:12, }
     _mapbitreswait = { 12:1, 14:12, 16:55, 18:237, }
+    _mapbitresdiv = {12:1000.0, 14:4000.0, 16:16000.0, 18:64000.0, }
 
-    """
-    # FIXME: use me or loose me
-    _ADC_SPS_240 = 0
-    _ADC_SPS_60 = 4
-    _ADC_SPS_15 = 8
-    _ADC_SPS_3_75 = 12
-    """
     _mapsps = { 240:0, 60:4, 15:8, 3.75:12, }
     _mapspswait = { 240:1, 60:12, 15:55, 3.75:237, }
+    _mapspsdiv = {240:1000.0, 60:4000.0, 15:16000.0, 3.75:64000.0, }
+
+    # MUX Input Channel Selection Bits 5-6
+    _mapipchan = { 1:0, 2:32, 3:64, 4:96, }
+
+    _mapcontconv = { 0:0, 1:16, }
 
     # Continuous Conversion Bit 4 
     _ADC_CC = 16
-    _mapcontconv = { 0:0, 1:16, }
-
-    # MUX Input Channel Selection Bits 5-6
-    """
-    # FIXME: use me or loose me
-    _ADC_IPCHAN_1 = 0
-    _ADC_IPCHAN_2 = 32
-    _ADC_IPCHAN_3 = 64
-    _ADC_IPCHAN_4 = 96
-    """
-    _mapipchan = { 1:0, 2:32, 3:64, 4:96, }
-
     # ADC READY Control Bit 7
     _ADC_RDY = 128
 
-
-    # Parameter Storage (set to defaults)
-    
-    # I2C address of ADC chip
+    # Default I2C bus of ADC chip
+    _adc_smbus = 1
+    # Default I2C address of ADC chip
     _adc_address = 0x68
+
+    # Defaults for configuration options
     _adc_gain = 1
-    _adc_bitres = 18
+    _adc_bitres = 12
     _adc_sps = 0
-    _adc_contconv = 0
     _adc_ipchan = 1
-    _adc_config = 0 + 12 + 0 + 0 + 128
-    _adc_delay = 235
+    # Default for Continuous vs One-Shot conversion
+    _adc_contconv = 0
 
+    # Combined options configuration flag
+    _adc_config = 0 + 0 + 0 + 0
+
+    # Delay in ms (related to BPS\SPS)
+    _adc_delay = 1
+    # Conversion divisor (related to BPS\SPS)
+    _adc_div = 1000.0
+    # Conversion functuion (related to BPS\SPS)
+    _adc_convfn = ()
+
+    # User provided callback
+    _tk_master = None
     _callback = ()
-    _callback_id = None
-    _master = None
 
-    def __init__(self, master = None):
+    # ADC busy (conversion in progress) handle
+    _adc_busyid = None
+
+
+    def __init__(self, adc_smbus = None, adc_address = None):
         """Prepare to perform hardware access."""
 
         print("RPiWobbulator ADC API Library Module Version " + 
                                                         str(self._vernum))
 
-        global i2c
-        try:
-            #import quick2wire i2c module
-            import quick2wire.i2c as i2c
-        except:
-            raise ADCException("Error during quick2wire.i2c import\n")
+        global time
+        import time
 
         try:
-            from Wobby.Lock import Lock as WobbyLock
-        except:
-            raise ADCException("Error during Wobby.Lock import\n")
+            import smbus
+        except ImportError:
+            msg = "\nError during smbus module import, ensure\n" + \
+                  "the python3-smbus package is installed..\n" + \
+                  "   sudo apt-get install python3-smbus\n"
+            print(msg)
+            raise
 
-        self._master = master
+        from Wobby.Lock import Lock as WobbyLock
 
         # obtain lock for ADC
-        self._lock = WobbyLock('ADC')
+        try:
+            self._lock = WobbyLock('ADC')
+        except:
+            raise ADCException("Error obtaining ADC Wobby lock\n")
 
-        # prepare i2c bus
-        self._bus = i2c.I2CMaster()
+        # NOTE: Early 256MB Pis < Revision 0004 are I2C0, smbus.SMBus(0)
+        # prepare smbus I2C1 bus
+
+        if adc_smbus != None:
+            self._adc_smbus = adc_smbus
+
+        if adc_address != None:
+            self._adc_address = adc_address
+
+        self._bus = smbus.SMBus(self._adc_smbus)
+
+        self._mapbitresfn = {12:self._read_12_14_16, 14:self._read_12_14_16,
+                                            16:self._read_12_14_16, 18:self._read_18, }
+        self._mapspsfn = {240:self._read_12_14_16, 60:self._read_12_14_16,
+                                            15:self._read_12_14_16, 3.75:self._read_18, }
+
+        # initialise to a sane state
+        self._config_update()
+
         return
 
     def version(self):
@@ -167,22 +174,27 @@ class ADC:
         This is an internal method, used to convert and combine the separate
         conversion parameters into the configuration byte value.
         """
-        gain = self._mapgain[self._adc_gain]
         # Either\Or, zero indicates the unused option
         if self._adc_bitres:
-            sps_bitres = self._mapbitres[self._adc_bitres]
+            self._adc_config = self._mapbitres[self._adc_bitres]
+            self._adc_delay = self._mapbitreswait[self._adc_bitres]
+            self._adc_div = self._mapbitresdiv[self._adc_bitres]
+            self._adc_convfn = self._mapbitresfn[self._adc_bitres]
             if self._adc_sps:
                 raise ADCException(_PROGRAM_ERROR_MESSAGE)
         elif self._adc_sps:
-            sps_bitres = self._mapsps[self._adc_sps]
+            self._adc_config = self._mapsps[self._adc_sps]
+            self._adc_delay = self._mapspswait[self._adc_sps]
+            self._adc_div = self._mapspsdiv[self._adc_sps]
+            self._adc_convfn = self._mapspsfn[self._adc_sps]
             if self._adc_bitres:
                 raise ADCException(_PROGRAM_ERROR_MESSAGE)
         else:
             raise ADCException(_PROGRAM_ERROR_MESSAGE)
 
-        contconv = self._mapcontconv[self._adc_contconv]
-        ipchan = self._mapipchan[self._adc_ipchan]
-        self._adc_config = gain + sps_bitres + contconv + ipchan + self._ADC_RDY
+        self._adc_config |= self._mapgain[self._adc_gain]
+        self._adc_config |= self._mapcontconv[self._adc_contconv]
+        self._adc_config |= self._mapipchan[self._adc_ipchan]
         return
 
     def set_gain(self, gain):
@@ -214,7 +226,7 @@ class ADC:
                 raise ValueError('Invalid argument:{} not in {}'.format(
                                             bitres, self._mapbitres.keys()))
             self._adc_bitres = bitres
-            self._adc_delay = self._mapbitreswait[self._adc_bitres]
+            # set bitres (or sps but not both)
             self._adc_sps = 0
             self._config_update()
         return
@@ -223,7 +235,7 @@ class ADC:
         """
         Set the 'Samples per Second' to be used during ADC conversion.
 
-        Valid argument values: 3.75, 15, 60, 240
+        Valid argument values: 240, 60, 15, 3.75
         Return: nothing
 
         This is an alternative to specifying the 'Bit Resolution'.
@@ -233,7 +245,7 @@ class ADC:
                 raise ValueError('Invalid argument:{} not in {}'.format(
                                                     sps, self._mapsps.keys()))
             self._adc_sps = sps
-            self._adc_delay = self._mapspswait[self._adc_sps]
+            # set sps (or bitres but not both)
             self._adc_bitres = 0
             self._config_update()
         return
@@ -290,7 +302,8 @@ class ADC:
         local variable configuration parameters accordingly. This ensures that
         later calling of a set_XXX() Method does not generate crud.
         """
-        self._adc_config = (adc_config & 0xFF)
+        # Ensure the _ADC_RDY bit is NOT set
+        self._adc_config = (adc_config & 0x7F)
 
         # gain bits 0-1
         gain = (adc_config & 0x03)
@@ -307,6 +320,8 @@ class ADC:
             if val == bitres:
                 self._adc_bitres = key
                 self._adc_delay = self._mapbitreswait[self._adc_bitres]
+                self._adc_div = self._mapbitresdiv[self._adc_bitres]
+                self._adc_convfn = self._mapbitresfn[self._adc_bitres]
                 break
 
         # continuous conversion flag bit 4
@@ -322,221 +337,119 @@ class ADC:
             if val == ipchan:
                 self._adc_ipchan = key
                 break
-
-        # RDY flag bit 7
-        # (adc_config & self._ADC_RDY)
-        # nothing to be done
         return
 
-    def raw_write(self, adc_data):
+    def _read_18(self):
         """
-        Directly write a byte into the ADC register.
+        Process 18 Bit conversion.
 
-        Return: nothing
-
-        Use of this Method is strongly discouraged as it could cause
-        side-effects, potentially resulting in a lock-up.
-        """
-        self._bus.transaction(i2c.writing_bytes(self._adc_address, adc_data))
-        return
-
-    def raw_read(self, reads):
-        """
-        Directly read byte(s) from the ADC register.
-
-        Argument: number of bytes to read
-        Return: byte(s) read
-
-        Use of this Method is strongly discouraged as it could cause
-        side-effects, potentially resulting in a lock-up.
-        """
-        return self._bus.transaction(i2c.reading(self._adc_address, reads))[0]
-
-    def _read(self):
-        """
-        Take a single reading from the ADC.
-
+        Read 3 bytes and status byte, convert to volts.
         Return: float value
-
-        Writes the local configuration byte to the ADC and then blocks until
-        the ADC has completed one conversion which is then read and returned.
         """
-        self._bus.transaction(i2c.writing_bytes(self._adc_address,
-                                                            self._adc_config))
-        if (self._adc_bitres == 18):
-            h, m, l ,s = self._bus.transaction(i2c.reading(
-                                                    self._adc_address, 4))[0]
-            while (s & 128):
-                h, m, l, s  = self._bus.transaction(i2c.reading(
-                                                    self._adc_address, 4))[0]
-            # shift bits to produce result
-            t = ((h & 0b00000001) << 16) | (m << 8) | l
-            # check if positive or negative number and invert if needed
-            if (h > 128):
-                t = ~(0x020000 - t)
-            return (t/64000.0)
-        else:
-            m, l ,s = self._bus.transaction(i2c.reading(
-                                                    self._adc_address, 3))[0]
-            while (s & 128):
-                m, l, s  = self._bus.transaction(i2c.reading(
-                                                    self._adc_address, 3))[0]
-            # shift bits to produce result
-            t = (m << 8) | l
-            # check if positive or negative number and invert if needed
-            if (m > 128):
-                t = ~(0x02000 - t)
-            if (self._adc_bitres == 16):
-                return (t/16000.0)
-            if (self._adc_bitres == 14):
-                return (t/4000.0)
-            if (self._adc_bitres == 12):
-                return (t/1000.0)
-
-    def _read_bytes4(self):
-        """
-        Read 4 bytes (18 Bit resolution conversion and status byte).
-
-        Return: integer value
-        """
-        h, m, l ,s = self._bus.transaction(i2c.reading(
-                                                self._adc_address, 4))[0]
+        # be nice and sleep a while rather than spin continuously
+        time.sleep(self._adc_delay/1000)
+        s = 128
         while (s & 128):
-            h, m, l, s  = self._bus.transaction(i2c.reading(
-                                                self._adc_address, 4))[0]
+            h, m, l ,s = self._bus.read_i2c_block_data(self._adc_address,
+                                                                self._adc_config, 4)
         # shift bits to produce result
         v = ((h & 0b00000001) << 16) | (m << 8) | l
         # check if positive or negative number and invert if needed
         if (h > 128):
             v = ~(0x020000 - v)
+        v = (v/self._adc_div)
+        self._adc_busyid = None
+        if self._callback:
+            self._callback(v)
         return v
 
-    def _read_bytes3(self):
+    def _read_12_14_16(self):
         """
-        Read 3 bytes (16, 14, 12 Bit resolution conversion and status byte).
+        Process 16, 14, and 12 Bit conversion.
 
-        Return: integer value
+        Read 2 bytes and status byte, convert to volts.
+        Return: float value
         """
-        m, l ,s = self._bus.transaction(i2c.reading(
-                                                self._adc_address, 3))[0]
+        # be nice and sleep a while rather than spin continuously
+        time.sleep(self._adc_delay/1000)
+        s = 128
         while (s & 128):
-            m, l, s  = self._bus.transaction(i2c.reading(
-                                                self._adc_address, 3))[0]
+            m ,l, s = self._bus.read_i2c_block_data(self._adc_address,
+                                                                self._adc_config, 3)
         # shift bits to produce result
         v = (m << 8) | l
         # check if positive or negative number and invert if needed
         if (m > 128):
             v = ~(0x02000 - v)
-        return v
-
-    def _read_18(self):
-        """
-        Convert 18 Bit resolution conversion to volts.
-
-        Return: float value
-        """
-        v = (self._read_bytes4()/64000)
+        v = (v/self._adc_div)
+        self._adc_busyid = None
         if self._callback:
             self._callback(v)
-        self._callback_id = None
-        return v
-
-    def _read_16(self):
-        """
-        Convert 16 Bit resolution conversion to volts.
-
-        Return: float value
-        """
-        v = (self._read_bytes3()/16000)
-        if self._callback:
-            self._callback(v)
-        self._callback_id = None
-        return v
-
-    def _read_14(self):
-        """
-        Convert 14 Bit resolution conversion to volts.
-
-        Return: float value
-        """
-        v = (self._read_bytes3()/4000)
-        if self._callback:
-            self._callback(v)
-        self._callback_id = None
-        return v
-
-    def _read_12(self):
-        """
-        Convert 12 Bit resolution conversion to volts.
-
-        Return: float value
-        """
-        v = (self._read_bytes3()/1000)
-        if self._callback:
-            self._callback(v)
-        self._callback_id = None
         return v
 
     def read_callback_cancel(self):
         """
         Cancel any scheduled callback.
         """
-        if self._callback_id != None:
-            if self._callback_id != -1:
-                self._master.after_cancel(self._callback_id)
-            self._callback_id = None
+        if self._adc_busyid != None:
+            self._adc_busyid = None
+            self._callback = None
         return
 
     def read(self, callback = None):
         """
         Initiate a single reading from the ADC.
 
-        Passed nothing:
+        Passed: nothing
         Return: float value
-        Writes the pre-defined configuration byte to the ADC and then blocks
+
+        Writes the pre-defined configuration byte to the ADC and blocks
         until the ADC has completed one conversion which is then read,
         converted to volts and returned.
 
-        Passed handler function:
+        Passed: callback function
         Return:  nothing
-        Writes the pre-defined configuration byte to the ADC and then arranges
-        for callback after an appropriate delay and returns. After the delay
-        expires the callback occurs, one conversion is read, converted to volts
-        and passed to the specified handler function.
+
+        Writes the pre-defined configuration byte to the ADC and spawns
+        a new thread and returns. The new thread blocks until the ADC
+        has completed one conversion which is then read, converted to
+        volts and returned via callback.
         """
-        if self._callback_id == None:
-            # immediately flag as 'busy'
-            self._callback_id = -1
-            # get bitres now in case it is changed after write
-            bitres = self._adc_bitres
-            self._bus.transaction(i2c.writing_bytes(self._adc_address,
-                                                            self._adc_config))
-            self._callback = callback
+        if self._adc_busyid == None:
+            # immediately flag as 'busy' to prevent re-entry
+            self._adc_busyid = -1
+            # start the conversion
+            self._bus.write_i2c_block_data(self._adc_address,
+                                            (self._adc_config | self._ADC_RDY), [])
+
             if callback:
-                # use the User's callback
-                if (bitres == 18):
-                    self._callback_id = self._master.after(self._adc_delay, self._read_18)
-                elif (bitres == 16):
-                    self._callback_id = self._master.after(self._adc_delay, self._read_16)
-                elif (bitres == 14):
-                    self._callback_id = self._master.after(self._adc_delay, self._read_14)
-                elif (bitres == 12):
-                    self._callback_id = self._master.after(self._adc_delay, self._read_12)
-                else:
-                    raise ADCException(_PROGRAM_ERROR_MESSAGE)
+
+                import threading
+
+                class NewThread(threading.Thread):
+
+                    _fn = ()
+
+                    def __init__(self, fn):
+                        #Setup object
+                        threading.Thread.__init__(self)
+                        self._fn = fn
+                        return
+
+                    def run(self):
+                        #Run object
+                        self._fn()
+                        return
+
+                self._callback = callback
+                process = NewThread(self._adc_convfn)
+                process.daemon = True
+                process.start()
                 return
             else:
-                # no callback, block & spin
-                if (bitres == 18):
-                    return self._read_18()
-                elif (bitres == 16):
-                    return self._read_16()
-                elif (bitres == 14):
-                    return self._read_14()
-                elif (bitres == 12):
-                    return self._read_12()
-                else:
-                    raise ADCException(_PROGRAM_ERROR_MESSAGE)
+                # No callback, block & spin for the conversion
+                return self._adc_convfn()
+
         else:
             raise ADCException("Busy")
         return
@@ -604,6 +517,8 @@ def main():
             print(__doc__)
         else:
             assert False, "Program Error: unhandled option"
+
+        return
 
 if __name__ == '__main__':
     main()
