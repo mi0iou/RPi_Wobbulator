@@ -12,25 +12,19 @@ DONE: Add 'fileencoding=ascii' to the vim editor (2nd) line to comply with PEP-0
 RPi_Wobbulator
 ~~~~~~~~~~~~~~
 
-'Reset' does not stop DDS output, should it ?
+Undo stack is not purged as trace is purged in Cycle mode
+Right-Click trace labels remain after trace is erased
+
 Correct (insufficient) use of 'power down' ?
-
-Simplify set-up
-sys.path.append("/opt/quick2wire-python-api.git") ?
-
 
 As Eduardo pointed out
 "the difference between frequencies should be lineal or logarithmical selectable"
-
 
 The program is far too procedural, several issues could
 be overcome using a more object orientated methodology.
 
 Add keybindings for keyboard menu operation
 Format Help & About messagebox text
-
-Consider:
-Trace removal could be more fine-grained by using trace colour as the tag
 
 DONE: save marker & associated text in wtf file
 DONE: Implement file sweep record\playback
