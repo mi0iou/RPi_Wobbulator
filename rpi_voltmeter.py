@@ -35,7 +35,7 @@ class RPiVoltMeter:
         frame.pack(fill=BOTH,expand=1)
         #display voltage
         self.voltage = DoubleVar()
-        voltdisplay = Label(frame, bg='white', textvariable=self.voltage, width=18)
+        voltdisplay = Label(frame, bg='white', textvariable=self.voltage, width=18, anchor=W)
         voltdisplay.grid(row=0, column=0)
         voltlabel = Label(frame, text='Volts')
         voltlabel.grid(row=0, column=1)
