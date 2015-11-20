@@ -931,13 +931,67 @@ www.asliceofraspberrypi.co.uk\n\
             p = self.volts_dBm(v)
             return '{0:02.1f} dBm\n'.format(p) + f
 
-    def place_marker(self, marker_list, colour):
+    def movable_mark(self, event):
+        """ Move mark text label of an existing mark to new position """
+        canvas.delete('vhtext')
+        mtext = self.marker['mtext']
+        canvas.create_text(event.x, event.y - 20, anchor = CENTER,
+                                    fill = self.canvFg, font = self.text_font,
+                                            text = mtext, tag = 'vhtext')
+        # draw trace mark at original x\y co-ordinates
+        mx = self.marker['x']
+        my = self.marker['y']
+        canvas.create_line(mx - 3, my - 3, mx + 4, my + 4,
+                                            fill = self.canvFg, tag = 'vhtext')
+        canvas.create_line(mx - 3, my + 3, mx + 4, my - 4,
+                                            fill = self.canvFg, tag = 'vhtext')
+        return
+
+    def mrd_common(self, event, colour):
+        """ Mouse Right Button Down """
+        # Issues with tkinter
+        # BUG: depressing right mouse button before releasing
+        # left button can cause the left release to be missed.
+        # BUG: depressing left mouse button over trace then
+        # moving mouse off trace and depressing right button
+        # (off trace) invokes mrd_?????, causing a mark to be
+        # placed off trace.
+        # create mark at current position
+        self.marker = {}
+        self.marker['mtext'] = self.marker_label(event)
+        self.marker['colour'] = colour
+        self.marker['x'] = event.x
+        self.marker['y'] = event.y
+        self.movable_mark(event)
+        return
+
+    def mrd_movement(self, event):
+        """ Mouse Right Button Down & Movement """
+        # redraw mark text at new position
+        self.movable_mark(event)
+        return
+
+    def mru_common(self, event):
+        """ Mouse Right Button Up """
+        # erase any current mark
+        canvas.delete('vhtext')
+        # redraw mark text at final position in correct colour
+        self.marker['xtext'] = event.x
+        self.marker['ytext']  = event.y
+        self.mru_mark()
+        return
+
+    def mru_mark(self):
         """ Draw trace mark and related text label """
+        # Add the mark to the canvas & lists
+        self.marker_list.append(deepcopy(self.marker))
+        marker_list = []
         # draw text at given x\y co-ordinates
+        colour = self.marker['colour']
+        tag_marker = 'm_' + colour
         mtext = self.marker['mtext']
         text_x = self.marker['xtext']
         text_y = self.marker['ytext']
-        tag_marker = 'm_' + colour
         itemID = canvas.create_text(text_x, text_y - 20, anchor = CENTER,
                                     fill = colour, font = self.text_font,
                                             text = mtext, tag = tag_marker)
@@ -951,63 +1005,9 @@ www.asliceofraspberrypi.co.uk\n\
         itemID = canvas.create_line(mx - 3, my + 3, mx + 4, my - 4,
                                             fill = colour, tag = tag_marker)
         marker_list.append(itemID)
-        return
 
-    def movable_mark(self, event):
-        """ Move mark text label of an existing mark to new position """
-        self.marker['xtext'] = event.x
-        self.marker['ytext']  = event.y
-        colour = self.canvFg
-        ID_list = []
-        self.place_marker(ID_list, colour)
-        self.undo_list.append([self.undo_marker, ID_list])
-        return
-
-    def mrd_common(self, event, colour):
-        """ Mouse Right Button Down """
-        # Issues with tkinter
-        # BUG: depressing right mouse button before releasing
-        # left button can cause the left release to be missed.
-        # BUG: depressing left mouse button over trace then
-        # moving mouse off trace and depressing right button
-        # (off trace) invokes mrd_?????, causing a mark to be
-        # placed off trace.
-        self.mlu_common(event)
-        # create mark at current position
-        self.marker = {}
-        self.marker['mtext'] = self.marker_label(event)
-        self.marker['colour'] = colour
-        self.marker['x'] = event.x
-        self.marker['y'] = event.y
-        self.movable_mark(event)
-        return
-
-    def mrd_movement(self, event):
-        """ Mouse Right Button Down & Movement """
-        # erase current mark
-        self.undo()
-        # redraw mark text at new position
-        self.movable_mark(event)
-        return
-
-    def mru_common(self, event):
-        """ Mouse Right Button Up """
-        # erase current mark
-        self.undo()
-        # redraw mark text at final position in correct colour
-        self.marker['xtext'] = event.x
-        self.marker['ytext']  = event.y
-        self.mru_mark()
-        return
-
-    def mru_mark(self):
-        # Add the mark to the canvas & lists
-        self.marker_list.append(deepcopy(self.marker))
-        colour = self.marker['colour']
-        ID_list = []
-        self.place_marker(ID_list, colour)
         # Require undo the marker list as well as the canvas marker
-        self.undo_list.append([self.undo_marker_list, ID_list])
+        self.undo_list.append([self.undo_marker_list, marker_list])
         return
 
     def marker_list_redraw(self):
@@ -1875,9 +1875,24 @@ www.asliceofraspberrypi.co.uk\n\
     def sweep_end(self):
         # completed a full sweep
 
-        if self.colcyc.get():
-            # cycle to next colour
-            self.colour_next()
+        # remove any mld\mrd labels
+        canvas.delete('vhtext')
+
+        # fixup the undo stack
+        if not self.memstore.get():
+            # the previous trace is on the list but may have a marker after it
+            while len(self.undo_list):
+                # fn_arg[0] is responsible for unallocating any fn_arg[1]
+                fn_arg = self.undo_list.pop()
+                if fn_arg[0] == self.undo_trace:
+                    # the trace has already been removed
+                    del fn_arg[0]
+                elif fn_arg[0] == self.undo_marker_list:
+                    # remove any mru labels
+                    (fn_arg[0])(fn_arg[1])
+                    del fn_arg[0]
+                else:
+                    raise Exception("Program Error in fixup undo stack")
 
         if self._imm_record:
             # Save as a list of 'trace plot sets'
@@ -1887,6 +1902,10 @@ www.asliceofraspberrypi.co.uk\n\
         self.line_list.append(deepcopy(self.line_buffer))
 
         self.b_undo.config(state = NORMAL)
+
+        if self.colcyc.get():
+            # cycle to next colour
+            self.colour_next()
 
         if self.oneflag:
             # single sweep completed
