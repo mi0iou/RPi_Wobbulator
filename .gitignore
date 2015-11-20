@@ -6,3 +6,7 @@
 Wobby/__pycache__
 # python compiled bytecode files
 *.pyc
+# reference
+aside/*
+# utility
+rsync.sh
