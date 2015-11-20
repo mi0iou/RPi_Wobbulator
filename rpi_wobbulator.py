@@ -105,7 +105,7 @@ def default_parameters():
     params['ddsclk'] = 125000000
     params['ddsmul'] = 0
 
-paramFN = 'wobbypi.pkl'
+paramFN = '.wobbypi.pkl'
 try:
     paramFile = open(paramFN,"rb")
 except IOError:
