@@ -3,17 +3,10 @@
 All
 ~~~
 WIP: Add docstrings
-
 WIP: Attempt to abide to PEP-8
-
-DONE: change to 'fileencoding=utf-8' and add '-*- coding: utf-8 -*-' for python3
-DONE: Add 'fileencoding=ascii' to the vim editor (2nd) line to comply with PEP-0263
 
 RPi_Wobbulator
 ~~~~~~~~~~~~~~
-
-Undo stack is not purged as trace is purged in Cycle mode
-Right-Click trace labels remain after trace is erased
 
 Correct (insufficient) use of 'power down' ?
 
@@ -26,13 +19,6 @@ be overcome using a more object orientated methodology.
 Add keybindings for keyboard menu operation
 Format Help & About messagebox text
 
-DONE: save marker & associated text in wtf file
-DONE: Implement file sweep record\playback
-DONE: Include 'Description' in image
-DONE: Be consistent about 'Version', derive every occurrance from the same definition
-DONE: Border vertical & horizontal scale labels when no graticule is displayed
-DONE: Only re-draw the affected vertical or horizontal scale, not both
-
 
 Wobby/DDS.py
 ~~~~~~~~~~~~~~
@@ -41,25 +27,8 @@ WIP: Add __main__ with basic test routine
 
 Wobby/ADC.py
 ~~~~~~~~~~~~~~
-ensure exit(self) does as required and is called where appropriate
-
-
 WIP: Add __main__ with basic test routine
 
-DONE: rename the 'simple' write to 'raw_write',
-DONE: create a companion simple read 'raw_read'.
- 
-
-Add method to support ADC in continous conversion mode:
-    need to be careful here, exactly 'how' is the User
-    application going to want to use this ?
-
-    threading & semaphores ?
-    callback ?
-    polling ?
-    blocking ?
-
-    Does (the) python (User) favour any particular one of these strategies ?
 
 Wobby/Lock.py
 ~~~~~~~~~~~~~
@@ -68,7 +37,4 @@ Add __main__ with basic test routine
 
 RPi_SignalGen
 ~~~~~~~~~~~~~
-
-DONE: Create a basic GUI App for testing
-
 
