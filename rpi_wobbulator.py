@@ -74,7 +74,7 @@ try:
 except:
     import pickle
 
-version = '2.7-004'
+version = '2.7-005'
 
 params = {}
 
