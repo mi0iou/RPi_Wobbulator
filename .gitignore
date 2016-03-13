@@ -1,0 +1,12 @@
+# configuration (created by application as required)
+*.pkl
+# editor temporary files
+*.swp
+# python cache files
+Wobby/__pycache__
+# python compiled bytecode files
+*.pyc
+# reference
+aside/*
+# utility
+rsync.sh

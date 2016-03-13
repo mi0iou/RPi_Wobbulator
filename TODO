@@ -1,0 +1,40 @@
+# TODO list & Notes (to avoid littering the source)
+
+All
+~~~
+WIP: Add docstrings
+WIP: Attempt to abide to PEP-8
+
+RPi_Wobbulator
+~~~~~~~~~~~~~~
+
+Correct (insufficient) use of 'power down' ?
+
+As Eduardo pointed out
+"the difference between frequencies should be lineal or logarithmical selectable"
+
+The program is far too procedural, several issues could
+be overcome using a more object orientated methodology.
+
+Add keybindings for keyboard menu operation
+Format Help & About messagebox text
+
+
+Wobby/DDS.py
+~~~~~~~~~~~~~~
+WIP: Add __main__ with basic test routine
+
+
+Wobby/ADC.py
+~~~~~~~~~~~~~~
+WIP: Add __main__ with basic test routine
+
+
+Wobby/Lock.py
+~~~~~~~~~~~~~
+Add __main__ with basic test routine
+
+
+RPi_SignalGen
+~~~~~~~~~~~~~
+
