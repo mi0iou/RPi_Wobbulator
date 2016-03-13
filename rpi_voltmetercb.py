@@ -60,14 +60,14 @@ class RPiVoltMeter:
                                                                 command=self.vmipchan)
         rb_ch4.pack(anchor=W)
 
-        rb_ch1.grid(column=0, row=0)
-        rb_ch2.grid(column=1, row=0)
-        rb_ch3.grid(column=2, row=0)
-        rb_ch4.grid(column=3, row=0)
+        # rb_ch1.grid(column=0, row=0)
+        # rb_ch2.grid(column=1, row=0)
+        # rb_ch3.grid(column=2, row=0)
+        # rb_ch4.grid(column=3, row=0)
 
         # start\stop control button
         self.b_m = Button(frame, text=' Start ', padx=5, pady=9, command=self.vmstart)
-        self.b_m.pack(anchor=W)
+        # self.b_m.pack(anchor=W)
         self.b_m.grid(row=1, column=1)
 
         # initialise the ADC
